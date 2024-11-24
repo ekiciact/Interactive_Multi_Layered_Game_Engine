@@ -1,0 +1,18 @@
+<RCC>
+    <qresource prefix="/">
+        <file>images/enemy.png</file>
+        <file>images/enemy_defeated.png</file>
+        <file>images/healthpack.png</file>
+        <file>images/maze1.png</file>
+        <file>images/maze2.png</file>
+        <file>images/maze3.png</file>
+        <file>images/penemy.png</file>
+        <file>images/protagonist.png</file>
+        <file>images/world.png</file>
+        <file>images/worldmap4.png</file>
+        <file>images/level1.png</file>
+        <file>images/level2.png</file>
+        <file>images/level3.png</file>
+        <file>images/portal.png</file>
+    </qresource>
+</RCC>
