@@ -1,7 +1,9 @@
 #include "textgameview.h"
 #include <QKeyEvent>
-#include <QDebug>
 #include <QScrollBar>
+#include <QDebug>
+#include <QHBoxLayout>
+#include <QVBoxLayout>
 
 TextGameView::TextGameView(GameModel *model, QWidget *parent)
     : QWidget(parent), model(model)
@@ -14,38 +16,51 @@ TextGameView::TextGameView(GameModel *model, QWidget *parent)
 
     statusTextEdit = new QTextEdit(this);
     statusTextEdit->setReadOnly(true);
-    statusTextEdit->setFixedWidth(200); // Adjust as needed
+    statusTextEdit->setFixedWidth(200);
 
-    setupLayout();
+    commandLine = new QLineEdit(this);
+    connect(commandLine, &QLineEdit::returnPressed, this, &TextGameView::onCommandReturnPressed);
+
+    setupLayout(); // now this function call has a definition below.
 
     connect(model, &GameModel::modelUpdated, this, &TextGameView::updateView);
     connect(model, &GameModel::gameOver, this, &TextGameView::handleGameOver);
-    connect(model, &GameModel::modelReset, this, &TextGameView::handleModelReset); // Connect to modelReset signal
+    connect(model, &GameModel::modelReset, this, &TextGameView::handleModelReset);
 
     renderTextWorld();
     updateStatus();
-
-    // Set focus policy to accept keyboard input
     setFocusPolicy(Qt::StrongFocus);
     setFocus();
+}
+
+TextGameView::~TextGameView()
+{}
+
+void TextGameView::setupLayout()
+{
+    // Create a main horizontal layout for text and status side by side
+    QHBoxLayout *mainLayout = new QHBoxLayout;
+    mainLayout->addWidget(textEdit, 3);
+    mainLayout->addWidget(statusTextEdit, 1);
+
+    // Create a vertical layout that holds the main layout plus the command line at the bottom
+    QVBoxLayout *vLayout = new QVBoxLayout(this);
+    vLayout->addLayout(mainLayout);
+    vLayout->addWidget(commandLine);
+
+    setLayout(vLayout);
+}
+
+void TextGameView::appendMessage(const QString &msg)
+{
+    textEdit->append(msg);
+    textEdit->verticalScrollBar()->setValue(textEdit->verticalScrollBar()->maximum());
 }
 
 void TextGameView::handleModelReset()
 {
     renderTextWorld();
     updateStatus();
-}
-
-TextGameView::~TextGameView()
-{
-}
-
-void TextGameView::setupLayout()
-{
-    QHBoxLayout *mainLayout = new QHBoxLayout(this);
-    mainLayout->addWidget(textEdit, 3); // 3/4 of the space
-    mainLayout->addWidget(statusTextEdit, 1); // 1/4 of the space
-    setLayout(mainLayout);
 }
 
 void TextGameView::updateView()
@@ -56,56 +71,53 @@ void TextGameView::updateView()
 
 void TextGameView::handleGameOver()
 {
-    textEdit->append("\nGame Over!");
-    textEdit->verticalScrollBar()->setValue(textEdit->verticalScrollBar()->maximum());
+    appendMessage("\nGame Over!");
 }
 
 void TextGameView::renderTextWorld()
 {
-    int rows = model->getWorld()->getRows();
-    int cols = model->getWorld()->getCols();
+    int rows = model->getRows();
+    int cols = model->getCols();
     QString text;
+    auto *p = model->getProtagonist();
 
-    for (int y = 0; y < rows; ++y) {
+    for (int y=0; y<rows; ++y) {
         QString line;
-        for (int x = 0; x < cols; ++x) {
-            QChar ch = '.';
-            Tile *tile = model->getTileAt(x, y);
-            if (tile->getValue() == std::numeric_limits<float>::infinity()) {
-                ch = '#'; // Wall
+        for (int x=0; x<cols; ++x) {
+            QChar ch='.';
+            TileWrapper *tile=nullptr;
+            for (auto &tw:model->getTiles()) {
+                if (tw->getXPos()==x && tw->getYPos()==y) {
+                    tile=tw.get();break;
+                }
+            }
+            if (tile && tile->getValue()==std::numeric_limits<float>::infinity()) {
+                ch='#';
             }
 
-            if (model->getProtagonist()->getXPos() == x &&
-                model->getProtagonist()->getYPos() == y) {
-                ch = 'P'; // Protagonist
+            if (p->getXPos()==x && p->getYPos()==y) {
+                ch='P';
             } else {
-                bool entityFound = false;
-                for (Enemy *enemy : model->getEnemies()) {
-                    if (!enemy->getDefeated() &&
-                        enemy->getXPos() == x && enemy->getYPos() == y) {
-                        if (dynamic_cast<PEnemy*>(enemy)) {
-                            ch = 'X'; // PEnemy
-                        } else {
-                            ch = 'E'; // Enemy
-                        }
-                        entityFound = true;
-                        break;
+                bool entityFound=false;
+                for (auto &e:model->getEnemies()) {
+                    if(!e->isDefeated() && e->getXPos()==x && e->getYPos()==y) {
+                        if (dynamic_cast<PEnemyWrapper*>(e.get())) ch='X'; // poisonous enemy
+                        else if (dynamic_cast<XEnemyWrapper*>(e.get())) ch='Z'; // XEnemy
+                        else ch='E';
+                        entityFound=true;break;
                     }
                 }
-                if (!entityFound) {
-                    for (Tile *hp : model->getHealthPacks()) {
-                        if (hp->getXPos() == x && hp->getYPos() == y) {
-                            ch = 'H'; // Health Pack
-                            entityFound = true;
-                            break;
+                if(!entityFound) {
+                    for (auto &hp:model->getHealthPacks()) {
+                        if (hp->getXPos()==x && hp->getYPos()==y) {
+                            ch='H';entityFound=true;break;
                         }
                     }
                 }
-                if (!entityFound) {
-                    for (Tile *portal : model->getPortals()) {
-                        if (portal->getXPos() == x && portal->getYPos() == y) {
-                            ch = 'O'; // Portal
-                            break;
+                if(!entityFound) {
+                    for (auto &port:model->getPortals()) {
+                        if (port->getXPos()==x && port->getYPos()==y) {
+                            ch='O';break;
                         }
                     }
                 }
@@ -113,7 +125,7 @@ void TextGameView::renderTextWorld()
 
             line.append(ch);
         }
-        text.append(line + '\n');
+        text.append(line+'\n');
     }
     textEdit->setPlainText(text);
     textEdit->verticalScrollBar()->setValue(textEdit->verticalScrollBar()->minimum());
@@ -121,99 +133,52 @@ void TextGameView::renderTextWorld()
 
 void TextGameView::updateStatus()
 {
-    Protagonist *protagonist = model->getProtagonist();
+    auto *p = model->getProtagonist();
     QString statusText = QString("Health: %1\nEnergy: %2\nLevel: %3")
-                             .arg(protagonist->getHealth())
-                             .arg(protagonist->getEnergy())
-                             .arg(model->getCurrentLevel() + 1); // Changed to use getter method
+                             .arg(p->getHealth())
+                             .arg(p->getEnergy())
+                             .arg(model->getCurrentLevel()+1);
 
-    // Find nearby entities within a certain radius
-    int radius = 3; // For example, 3 tiles
-    int pX = protagonist->getXPos();
-    int pY = protagonist->getYPos();
-    QList<QString> nearbyEntities;
-
-    for (Enemy *enemy : model->getEnemies()) {
-        if (!enemy->getDefeated()) {
-            int eX = enemy->getXPos();
-            int eY = enemy->getYPos();
-            int distX = qAbs(eX - pX);
-            int distY = qAbs(eY - pY);
-            if (distX <= radius && distY <= radius) {
-                QString enemyType = "Enemy";
-                if (dynamic_cast<PEnemy*>(enemy)) {
-                    enemyType = "Poisonous Enemy";
-                }
-                nearbyEntities.append(QString("%1 at (%2,%3)")
-                                          .arg(enemyType)
-                                          .arg(eX)
-                                          .arg(eY));
+    int radius=3;
+    int pX=p->getXPos();int pY=p->getYPos();
+    QList<QString> nearby;
+    for (auto &e:model->getEnemies()) {
+        if(!e->isDefeated()) {
+            int distX=qAbs(e->getXPos()-pX);
+            int distY=qAbs(e->getYPos()-pY);
+            if (distX<=radius&&distY<=radius) {
+                QString et="Enemy";
+                if (dynamic_cast<PEnemyWrapper*>(e.get())) et="Poisonous Enemy";
+                if (dynamic_cast<XEnemyWrapper*>(e.get())) et="XEnemy";
+                nearby.append(QString("%1 at (%2,%3)").arg(et).arg(e->getXPos()).arg(e->getYPos()));
             }
         }
     }
-
-    for (Tile *hp : model->getHealthPacks()) {
-        int hX = hp->getXPos();
-        int hY = hp->getYPos();
-        int distX = qAbs(hX - pX);
-        int distY = qAbs(hY - pY);
-        if (distX <= radius && distY <= radius) {
-            nearbyEntities.append(QString("Health Pack at (%1,%2)")
-                                      .arg(hX)
-                                      .arg(hY));
-        }
+    for (auto &hp:model->getHealthPacks()) {
+        int distX=qAbs(hp->getXPos()-pX);
+        int distY=qAbs(hp->getYPos()-pY);
+        if(distX<=radius&&distY<=radius)
+            nearby.append(QString("Health Pack at (%1,%2)").arg(hp->getXPos()).arg(hp->getYPos()));
+    }
+    for (auto &port:model->getPortals()) {
+        int distX=qAbs(port->getXPos()-pX);
+        int distY=qAbs(port->getYPos()-pY);
+        if(distX<=radius&&distY<=radius)
+            nearby.append(QString("Portal at (%1,%2)").arg(port->getXPos()).arg(port->getYPos()));
     }
 
-    for (Tile *portal : model->getPortals()) {
-        int ptX = portal->getXPos();
-        int ptY = portal->getYPos();
-        int distX = qAbs(ptX - pX);
-        int distY = qAbs(ptY - pY);
-        if (distX <= radius && distY <= radius) {
-            nearbyEntities.append(QString("Portal at (%1,%2)")
-                                      .arg(ptX)
-                                      .arg(ptY));
-        }
-    }
-
-    if (!nearbyEntities.isEmpty()) {
+    if(!nearby.isEmpty()) {
         statusText.append("\n\nNearby Entities:");
-        for (const QString &entityInfo : nearbyEntities) {
-            statusText.append("\n- " + entityInfo);
-        }
+        for(auto &n:nearby) statusText.append("\n- "+n);
     }
 
     statusTextEdit->setPlainText(statusText);
 }
 
-void TextGameView::keyPressEvent(QKeyEvent *event)
+void TextGameView::onCommandReturnPressed()
 {
-    int dx = 0;
-    int dy = 0;
-    switch (event->key()) {
-    case Qt::Key_Left:
-    case Qt::Key_A:
-        dx = -1;
-        break;
-    case Qt::Key_Right:
-    case Qt::Key_D:
-        dx = 1;
-        break;
-    case Qt::Key_Up:
-    case Qt::Key_W:
-        dy = -1;
-        break;
-    case Qt::Key_Down:
-    case Qt::Key_S:
-        dy = 1;
-        break;
-    case Qt::Key_Space:
-        model->startAutoPlay();
-        return;
-    default:
-        QWidget::keyPressEvent(event);
-        return;
-    }
-
-    model->moveProtagonist(dx, dy);
+    QString cmd = commandLine->text();
+    commandLine->clear();
+    if (cmd.isEmpty()) return;
+    emit commandEntered(cmd);
 }

@@ -17,14 +17,22 @@ SOURCES += \
     textgameview.cpp
 
 HEADERS += \
+    commandparser.h \
+    enemy.h \
     gamecontroller.h \
     gamemodel.h \
     gameview.h \
+    healthpack.h \
     mainwindow.h \
-    textgameview.h
+    node.h \
+    penemy.h \
+    portal.h \
+    protagonist.h \
+    textgameview.h \
+    tile.h \
+    xenemy.h
 
-FORMS += \
-    mainwindow.ui
+FORMS +=
 
 # Default rules for deployment.
 qnx: target.path = /tmp/$${TARGET}/bin
@@ -46,10 +54,12 @@ DISTFILES += \
     images/healthpack.png \
     images/level1.png \
     images/level2.png \
+    images/level2_arc.png \
     images/level3.png \
     images/maze1.png \
     images/maze2.png \
     images/maze3.png \
+    images/overlay.png \
     images/penemy.png \
     images/portal.png \
     images/protagonist.png \

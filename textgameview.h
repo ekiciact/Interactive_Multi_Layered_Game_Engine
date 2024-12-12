@@ -3,6 +3,7 @@
 
 #include <QWidget>
 #include <QTextEdit>
+#include <QLineEdit>
 #include <QHBoxLayout>
 #include "gamemodel.h"
 
@@ -14,13 +15,16 @@ public:
     explicit TextGameView(GameModel *model, QWidget *parent = nullptr);
     ~TextGameView() override;
 
-protected:
-    void keyPressEvent(QKeyEvent *event) override;
+    void appendMessage(const QString &msg);
+
+signals:
+    void commandEntered(QString command);
 
 private slots:
     void updateView();
     void handleGameOver();
-    void handleModelReset(); // Slot to handle model reset
+    void handleModelReset();
+    void onCommandReturnPressed();
 
 private:
     void renderTextWorld();
@@ -29,7 +33,8 @@ private:
 
     GameModel *model;
     QTextEdit *textEdit;
-    QTextEdit *statusTextEdit; // Status panel
+    QTextEdit *statusTextEdit;
+    QLineEdit *commandLine;
 };
 
 #endif // TEXTGAMEVIEW_H

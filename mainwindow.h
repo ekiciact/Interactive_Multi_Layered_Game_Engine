@@ -7,6 +7,11 @@ QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
 QT_END_NAMESPACE
 
+/**
+ *
+ * Here we just keep it minimal and unused
+ */
+
 class MainWindow : public QMainWindow
 {
     Q_OBJECT
@@ -18,4 +23,5 @@ public:
 private:
     Ui::MainWindow *ui;
 };
+
 #endif // MAINWINDOW_H

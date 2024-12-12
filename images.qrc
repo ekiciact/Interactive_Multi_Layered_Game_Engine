@@ -14,5 +14,6 @@
         <file>images/level2.png</file>
         <file>images/level3.png</file>
         <file>images/portal.png</file>
+        <file>images/xenemy.png</file>
     </qresource>
 </RCC>

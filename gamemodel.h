@@ -2,133 +2,81 @@
 #define GAMEMODEL_H
 
 #include <QObject>
+#include <QVector>
 #include <QList>
-#include <QTimer>
-#include <vector>
+#include <memory>
+
 #include "world.h"
-#include "pathfinder_class.h"
+#include "protagonist.h"
+#include "enemy.h"
+#include "penemy.h"
+#include "xenemy.h"
+#include "healthpack.h"
+#include "portal.h"
+#include "tile.h"
+#include <vector>
 
-// Forward declaration
-class Level;
+/**
+ * The GameModel primarily holds the game's state (protagonist, enemies, tiles, health packs, portals).
 
-class Node : public Tile
-{
-public:
-    float f;
-    float g;
-    float h;
-    bool visited;
-    bool closed;
-    Node* prev;
+ *
+ * GameModel just stores and provides access to data.
+ *
+ * Signals:
+ * - modelUpdated(): Emitted when the model's data changes and the view should update.
+ * - gameOver(): Emitted when the game is over.
+ * - modelReset(): Emitted when the model state is reset (like starting a new game or loading a saved game).
+ */
 
-    Node(int xPosition, int yPosition, float tileValue)
-        : Tile(xPosition, yPosition, tileValue), f(0), g(0), h(0), visited(false), closed(false), prev(nullptr)
-    {}
-
-    Node(const Node &other)
-        : Tile(other.getXPos(), other.getYPos(), other.getValue()), f(other.f), g(other.g), h(other.h), visited(other.visited), closed(other.closed), prev(other.prev)
-    {}
-
-    Node& operator=(const Node &other)
-    {
-        if (this != &other)
-        {
-            xPos = other.getXPos();
-            yPos = other.getYPos();
-            value = other.getValue();
-            f = other.f;
-            g = other.g;
-            h = other.h;
-            visited = other.visited;
-            closed = other.closed;
-            prev = other.prev;
-        }
-        return *this;
-    }
-
-    // Required for priority_queue comparison
-    bool operator>(const Node &other) const
-    {
-        return f > other.f;
-    }
-};
-
-class GameModel : public QObject
-{
+class GameModel : public QObject {
     Q_OBJECT
 
 public:
     explicit GameModel(QObject *parent = nullptr);
     ~GameModel();
 
-    Tile* getTileAt(int x, int y);
-    World* getWorld() const;
-    Protagonist* getProtagonist() const;
-    QList<Enemy*> getEnemies() const;
-    QList<Tile*> getHealthPacks() const;
-    QList<Tile*> getPortals() const;
+    // Accessors
+    int getRows() const { return rows; }
+    int getCols() const { return cols; }
 
-    void moveProtagonist(int dx, int dy);
-    void startAutoPlay();
-    void stopAutoPlay();
+    ProtagonistWrapper* getProtagonist() const { return protagonist.get(); }
+    const std::vector<std::unique_ptr<EnemyWrapper>>& getEnemies() const { return enemies; }
+    const std::vector<std::unique_ptr<HealthPack>>& getHealthPacks() const { return healthPacks; }
+    const std::vector<std::unique_ptr<Portal>>& getPortals() const { return portals; }
+    const std::vector<std::unique_ptr<TileWrapper>>& getTiles() const { return tiles; }
 
-    bool saveGame(const QString &fileName);
-    bool loadGame(const QString &fileName);
+    // Mutators
+    void setProtagonist(std::unique_ptr<ProtagonistWrapper> p);
+    void setTiles(std::vector<std::unique_ptr<TileWrapper>> t, int r, int c);
+    void setEnemies(std::vector<std::unique_ptr<EnemyWrapper>> e);
+    void setHealthPacks(std::vector<std::unique_ptr<HealthPack>> hp);
+    void setPortals(std::vector<std::unique_ptr<Portal>> p);
 
-    void newGame();
-    void restartGame();
+    void setCurrentLevel(int level) { currentLevel = level; }
+    int getCurrentLevel() const { return currentLevel; }
 
-    int getCurrentLevel() const { return currentLevel; } // Getter for currentLevel
+    // For loading/saving and new/restart games
+    const QVector<QString>& getLevelFiles() const { return levelFiles; }
 
 signals:
     void modelUpdated();
     void gameOver();
-    void modelReset(); // New signal to indicate the model has been reset
-
-private slots:
-    void autoPlayStep();
+    void modelReset();
 
 private:
-    void initializeWorld();
-    void cleanupWorld();
-
-    void checkForEncounters();
-    void checkForHealthPacks();
-    void checkForPortal();
-    void handlePEnemyPoison(PEnemy *pEnemy);
-
-    // Methods for auto-play logic
-    Enemy* findNextTargetEnemy();
-    void planPathToEnemy(Enemy* targetEnemy);
-    void planPathToHealthPack();
-    void planPathToPortal();
-    void planPathToEnemyWithHealthPacks(Enemy* targetEnemy);
-    void decideNextAction();
-    void resetNodes();
-
-    enum class TargetType { None, Enemy, HealthPack, Portal };
-    TargetType currentTarget;
-
-    World *world;
-    Protagonist *protagonist;
-    QList<Enemy*> enemies;
-    QList<Tile*> healthPacks;
-    QList<Tile*> portals;    // List of portals
-    QVector<Tile*> tiles;
-    std::vector<Node> nodes;
-
     int rows;
     int cols;
 
-    QTimer *autoPlayTimer;
-    std::vector<int> autoPath;
-    int autoPathIndex;
-
-    // Comparator for nodes
-    Comparator<Node> nodeComparator;
+    std::unique_ptr<ProtagonistWrapper> protagonist;
+    std::vector<std::unique_ptr<EnemyWrapper>> enemies;
+    std::vector<std::unique_ptr<HealthPack>> healthPacks;
+    std::vector<std::unique_ptr<Portal>> portals;
+    std::vector<std::unique_ptr<TileWrapper>> tiles;
 
     int currentLevel;
-    QVector<QString> levelFiles;
+    QVector<QString> levelFiles; // Levels
+
+    friend class GameController; // Allow GameController access if needed
 };
 
 #endif // GAMEMODEL_H
