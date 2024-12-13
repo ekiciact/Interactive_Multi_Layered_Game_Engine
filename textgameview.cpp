@@ -4,9 +4,10 @@
 #include <QDebug>
 #include <QHBoxLayout>
 #include <QVBoxLayout>
+#include <limits>
 
 TextGameView::TextGameView(GameModel *model, QWidget *parent)
-    : QWidget(parent), model(model)
+    : QWidget(parent), model(model), colorIndex(0)
 {
     textEdit = new QTextEdit(this);
     textEdit->setReadOnly(true);
@@ -21,11 +22,32 @@ TextGameView::TextGameView(GameModel *model, QWidget *parent)
     commandLine = new QLineEdit(this);
     connect(commandLine, &QLineEdit::returnPressed, this, &TextGameView::onCommandReturnPressed);
 
-    setupLayout(); // now this function call has a definition below.
+    setupLayout();
 
     connect(model, &GameModel::modelUpdated, this, &TextGameView::updateView);
     connect(model, &GameModel::gameOver, this, &TextGameView::handleGameOver);
     connect(model, &GameModel::modelReset, this, &TextGameView::handleModelReset);
+
+    // Define a cycle of colors for the protagonist (like RGB LED cycling):
+    // Add more colors or change them.
+    colorCycle << "rgb(255,255,0)"
+               << "rgb(255,0,255)"
+               << "rgb(0,255,255)"
+               << "rgb(128,0,128)"
+               << "rgb(255,165,0)"
+               << "rgb(128,128,0)"
+               << "rgb(0,128,128)"
+               << "rgb(255,192,203)"
+               << "rgb(139,69,19)"
+               << "rgb(173,216,230)"
+               << "rgb(240,230,140)"
+               << "rgb(255,222,173)";
+
+
+    // Setup a timer to cycle protagonist color periodically
+    colorTimer = new QTimer(this);
+    connect(colorTimer, &QTimer::timeout, this, &TextGameView::cycleProtagonistColor);
+    colorTimer->start(250); // Change color every 0.25 second
 
     renderTextWorld();
     updateStatus();
@@ -78,56 +100,108 @@ void TextGameView::renderTextWorld()
 {
     int rows = model->getRows();
     int cols = model->getCols();
-    QString text;
+    QString htmlText;
     auto *p = model->getProtagonist();
+
+    // Get current protagonist color
+    QString currentColor = colorCycle[colorIndex % colorCycle.size()];
+
+    htmlText.append("<pre>");
 
     for (int y=0; y<rows; ++y) {
         QString line;
         for (int x=0; x<cols; ++x) {
+            QString styledChar;
             QChar ch='.';
-            TileWrapper *tile=nullptr;
+            TileWrapper *tile = nullptr;
             for (auto &tw:model->getTiles()) {
                 if (tw->getXPos()==x && tw->getYPos()==y) {
-                    tile=tw.get();break;
+                    tile=tw.get();
+                    break;
                 }
             }
+
+            // Check for infinite tile
             if (tile && tile->getValue()==std::numeric_limits<float>::infinity()) {
                 ch='#';
             }
 
+            // Check if protagonist is here
             if (p->getXPos()==x && p->getYPos()==y) {
-                ch='P';
+                // Protagonist: use the cycling color
+                styledChar = QString("<span style='font-weight:bold; color:%1;'>P</span>")
+                                 .arg(currentColor);
             } else {
-                bool entityFound=false;
+                bool entityFound = false;
+
+                // Check for enemies
+                // If enemy is alive:
+                //   XEnemy = 'X', PEnemy = 'P', normal Enemy = 'E'
+                // If enemy is defeated:
+                //   'D' (red)
+                bool enemyPlaced = false;
                 for (auto &e:model->getEnemies()) {
-                    if(!e->isDefeated() && e->getXPos()==x && e->getYPos()==y) {
-                        if (dynamic_cast<PEnemyWrapper*>(e.get())) ch='X'; // poisonous enemy
-                        else if (dynamic_cast<XEnemyWrapper*>(e.get())) ch='Z'; // XEnemy
-                        else ch='E';
-                        entityFound=true;break;
+                    if (e->getXPos()==x && e->getYPos()==y) {
+                        if (!e->isDefeated()) {
+                            if (dynamic_cast<PEnemyWrapper*>(e.get())) {
+                                styledChar = "P"; // PEnemy (capital P)
+                            } else if (dynamic_cast<XEnemyWrapper*>(e.get())) {
+                                styledChar = "X"; // XEnemy
+                            } else {
+                                styledChar = "E"; // Normal enemy
+                            }
+                            enemyPlaced = true;
+                        } else {
+                            // Defeated enemy
+                            styledChar = "<span style='color:red;'>D</span>";
+                            enemyPlaced = true;
+                        }
+                        entityFound = true;
+                        break;
                     }
                 }
-                if(!entityFound) {
+
+                // If no enemy found or placed, check health packs
+                if (!entityFound) {
                     for (auto &hp:model->getHealthPacks()) {
                         if (hp->getXPos()==x && hp->getYPos()==y) {
-                            ch='H';entityFound=true;break;
+                            // Health Pack: 'H' green color
+                            styledChar = "<span style='color:green;'>H</span>";
+                            entityFound = true;
+                            break;
                         }
                     }
                 }
-                if(!entityFound) {
+
+                // Check portals if still nothing found
+                if (!entityFound) {
                     for (auto &port:model->getPortals()) {
                         if (port->getXPos()==x && port->getYPos()==y) {
-                            ch='O';break;
+                            // Portal: 'O' blue color
+                            styledChar = "<span style='color:blue;'>O</span>";
+                            entityFound = true;
+                            break;
                         }
+                    }
+                }
+
+                // If still no entity found, use default
+                if (!entityFound) {
+                    if (ch == '#') {
+                        styledChar = "#";
+                    } else {
+                        styledChar = ".";
                     }
                 }
             }
 
-            line.append(ch);
+            line.append(styledChar);
         }
-        text.append(line+'\n');
+        htmlText.append(line + "\n");
     }
-    textEdit->setPlainText(text);
+    htmlText.append("</pre>");
+
+    textEdit->setHtml(htmlText);
     textEdit->verticalScrollBar()->setValue(textEdit->verticalScrollBar()->minimum());
 }
 
@@ -181,4 +255,12 @@ void TextGameView::onCommandReturnPressed()
     commandLine->clear();
     if (cmd.isEmpty()) return;
     emit commandEntered(cmd);
+}
+
+void TextGameView::cycleProtagonistColor()
+{
+    // Cycle to the next color
+    colorIndex = (colorIndex + 1) % colorCycle.size();
+    // Re-render the view to show the new protagonist color
+    updateView();
 }

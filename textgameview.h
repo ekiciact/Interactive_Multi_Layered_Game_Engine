@@ -5,6 +5,7 @@
 #include <QTextEdit>
 #include <QLineEdit>
 #include <QHBoxLayout>
+#include <QTimer>
 #include "gamemodel.h"
 
 class TextGameView : public QWidget
@@ -25,6 +26,7 @@ private slots:
     void handleGameOver();
     void handleModelReset();
     void onCommandReturnPressed();
+    void cycleProtagonistColor();
 
 private:
     void renderTextWorld();
@@ -35,6 +37,10 @@ private:
     QTextEdit *textEdit;
     QTextEdit *statusTextEdit;
     QLineEdit *commandLine;
+
+    QTimer *colorTimer;       // Timer to cycle protagonist color
+    QStringList colorCycle;    // Colors for the protagonist
+    int colorIndex;            // Current color index
 };
 
 #endif // TEXTGAMEVIEW_H
