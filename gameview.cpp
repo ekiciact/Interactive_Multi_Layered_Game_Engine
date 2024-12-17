@@ -167,19 +167,36 @@ void GameView::updateView()
         protagonistItem->setPos(protagonist->getXPos()*32, protagonist->getYPos()*32);
     }
 
-    // Update enemy positions:
     for (auto &enemy : model->getEnemies()) {
         QGraphicsPixmapItem *item = enemyItems.value(enemy.get(), nullptr);
         if (item) {
-            // Reposition enemy based on current coords
             item->setPos(enemy->getXPos()*32, enemy->getYPos()*32);
 
             if (enemy->isDefeated()) {
+                // Show defeated PNG for XEnemy as well as normal enemies
                 item->setPixmap(QPixmap(":/images/enemy_defeated.png").scaled(32,32));
             } else {
-                if (dynamic_cast<XEnemyWrapper*>(enemy.get())) {
-                    // Optionally set a different image:
+                // If not defeated, normal or XEnemy image logic.
+                // For XEnemy after teleport: show normal or XEnemy image as needed
+                if (auto xE = dynamic_cast<XEnemyWrapper*>(enemy.get())) {
+                    if (xE->hasJustTeleported()) {
+                        // Place optional PNGs as before, then clear the flag
+//                        QGraphicsPixmapItem *oldEffect = scene->addPixmap(QPixmap(":/images/teleport_old.png").scaled(32,32));
+//                        oldEffect->setPos(xE->getOldX()*32, xE->getOldY()*32);
+//                        oldEffect->setZValue(11);
+
+
+                        QGraphicsPixmapItem *newEffect = scene->addPixmap(QPixmap(":/images/teleport_new.png").scaled(32,32));
+                        newEffect->setPos(enemy->getXPos()*32, enemy->getYPos()*32);
+                        newEffect->setZValue(11);
+
+                        xE->clearJustTeleported();
+                    }
+                    // Optionally change the image if you have a special XEnemy image
                     // item->setPixmap(QPixmap(":/images/xenemy.png").scaled(32,32));
+                } else {
+                    // Normal enemy image if needed:
+                    // item->setPixmap(QPixmap(":/images/enemy.png").scaled(32,32));
                 }
             }
         }

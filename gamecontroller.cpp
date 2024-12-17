@@ -349,11 +349,30 @@ void GameController::checkForEncounters()
     for (auto &e : model->getEnemies()) {
         if (!e->isDefeated() && e->getXPos() == p->getXPos() && e->getYPos() == p->getYPos()) {
             if (auto xE = dynamic_cast<XEnemyWrapper*>(e.get())) {
-                // XEnemy hit logic
-                xE->hit();
-                // On first hit: it just teleports and gets stronger. No damage to protagonist.
-                // On second hit: enemy is defeated.
-                emit model->modelUpdated();
+                // XEnemy logic:
+                if (xE->getTimesHit() == 0) {
+                    // First encounter: Teleport, no damage
+                    // Just call hit once
+                    xE->hit();
+                    emit model->modelUpdated();
+                } else if (xE->getTimesHit() == 1) {
+                    // Second encounter:
+                    // damage as normal enemy
+                    float healthCost = e->getStrength();
+                    float newHealth = p->getHealth() - healthCost;
+                    if (newHealth > 0) {
+                        // Protagonist survives second encounter damage
+                        p->setHealth(newHealth);
+                        // Now defeat the XEnemy with a second hit
+                        xE->hit(); // This sets it defeated
+                        emit model->modelUpdated();
+                    } else {
+                        // Protagonist dies
+                        p->setHealth(0);
+                        emit model->gameOver();
+                        stopAutoPlay();
+                    }
+                }
             } else {
                 // Normal or PEnemy logic:
                 float healthCost = e->getStrength();
@@ -361,7 +380,6 @@ void GameController::checkForEncounters()
                 if (newHealth > 0) {
                     p->setHealth(newHealth);
                     e->setDefeated(true);
-                    // If PEnemy:
                     if (auto pE = dynamic_cast<PEnemy*>(e->getRaw())) {
                         pE->poison();
                         handlePEnemyPoison(pE);
@@ -377,6 +395,8 @@ void GameController::checkForEncounters()
         }
     }
 }
+
+
 
 
 

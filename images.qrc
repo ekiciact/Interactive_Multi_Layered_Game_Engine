@@ -15,5 +15,7 @@
         <file>images/level3.png</file>
         <file>images/portal.png</file>
         <file>images/xenemy.png</file>
+        <file>images/teleport_new.png</file>
+        <file>images/teleport_old.png</file>
     </qresource>
 </RCC>
