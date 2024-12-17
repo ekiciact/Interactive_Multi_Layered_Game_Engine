@@ -348,31 +348,37 @@ void GameController::checkForEncounters()
     auto *p = model->getProtagonist();
     for (auto &e : model->getEnemies()) {
         if (!e->isDefeated() && e->getXPos() == p->getXPos() && e->getYPos() == p->getYPos()) {
-            float healthCost = e->getStrength();
-            float newHealth = p->getHealth() - healthCost;
-            if (newHealth > 0) {
-                p->setHealth(newHealth);
-                if (auto xE = dynamic_cast<XEnemyWrapper*>(e.get())) {
-                    xE->hit();
-                } else {
-                    e->setDefeated(true);
-                }
-
-                if (auto pE = dynamic_cast<PEnemy*>(e->getRaw())) {
-                    pE->poison();
-                    handlePEnemyPoison(pE);
-                }
-
+            if (auto xE = dynamic_cast<XEnemyWrapper*>(e.get())) {
+                // XEnemy hit logic
+                xE->hit();
+                // On first hit: it just teleports and gets stronger. No damage to protagonist.
+                // On second hit: enemy is defeated.
                 emit model->modelUpdated();
             } else {
-                p->setHealth(0);
-                emit model->gameOver();
-                stopAutoPlay();
+                // Normal or PEnemy logic:
+                float healthCost = e->getStrength();
+                float newHealth = p->getHealth() - healthCost;
+                if (newHealth > 0) {
+                    p->setHealth(newHealth);
+                    e->setDefeated(true);
+                    // If PEnemy:
+                    if (auto pE = dynamic_cast<PEnemy*>(e->getRaw())) {
+                        pE->poison();
+                        handlePEnemyPoison(pE);
+                    }
+                    emit model->modelUpdated();
+                } else {
+                    p->setHealth(0);
+                    emit model->gameOver();
+                    stopAutoPlay();
+                }
             }
             break;
         }
     }
 }
+
+
 
 void GameController::checkForHealthPacks()
 {

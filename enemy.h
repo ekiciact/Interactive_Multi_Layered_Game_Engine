@@ -7,11 +7,10 @@
 
 class EnemyWrapper {
 public:
-    virtual ~EnemyWrapper() = default; // Add virtual destructor for polymorphism
+    virtual ~EnemyWrapper() = default;
 
     explicit EnemyWrapper(std::unique_ptr<Enemy> e)
-        : enemy(std::move(e))
-    {}
+        : enemy(std::move(e)) {}
 
     int getXPos() const noexcept { return enemy->getXPos(); }
     int getYPos() const noexcept { return enemy->getYPos(); }
@@ -19,7 +18,7 @@ public:
     bool isDefeated() const noexcept { return enemy->getDefeated(); }
     void setDefeated(bool d) noexcept { enemy->setDefeated(d); }
 
-    std::string serialize() const noexcept {
+    virtual std::string serialize() const noexcept {
         return "Enemy: " + enemy->serialize();
     }
 

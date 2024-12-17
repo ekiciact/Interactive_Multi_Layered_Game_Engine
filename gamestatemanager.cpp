@@ -136,8 +136,6 @@ bool GameStateManager::saveGameToFile(GameModel *model, const QString &fileName)
             << e->getStrength() << " " << (e->isDefeated()?1:0);
         if (pE) {
             out << " " << pE->getPoisonLevel();
-        } else if (xE) {
-            out << " X" << (xE->hasResurrected()?1:0);
         }
         out << "\n";
     }

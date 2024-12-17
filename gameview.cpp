@@ -165,18 +165,22 @@ void GameView::updateView()
     ProtagonistWrapper *protagonist = model->getProtagonist();
     if (protagonistItem) {
         protagonistItem->setPos(protagonist->getXPos()*32, protagonist->getYPos()*32);
-        animateProtagonist("move");
     }
 
+    // Update enemy positions:
     for (auto &enemy : model->getEnemies()) {
-        QGraphicsPixmapItem *item = enemyItems.value(enemy.get());
-        if (enemy->isDefeated()) {
-            item->setPixmap(QPixmap(":/images/enemy_defeated.png").scaled(32,32));
-        } else {
-            // If PEnemy, show poison animation
-            if (auto pE = dynamic_cast<PEnemy*>(enemy->getRaw())) {
-                int alpha = static_cast<int>((pE->getPoisonLevel()/100.0f)*255);
-                item->setOpacity(alpha/255.0);
+        QGraphicsPixmapItem *item = enemyItems.value(enemy.get(), nullptr);
+        if (item) {
+            // Reposition enemy based on current coords
+            item->setPos(enemy->getXPos()*32, enemy->getYPos()*32);
+
+            if (enemy->isDefeated()) {
+                item->setPixmap(QPixmap(":/images/enemy_defeated.png").scaled(32,32));
+            } else {
+                if (dynamic_cast<XEnemyWrapper*>(enemy.get())) {
+                    // Optionally set a different image:
+                    // item->setPixmap(QPixmap(":/images/xenemy.png").scaled(32,32));
+                }
             }
         }
     }
