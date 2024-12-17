@@ -10,8 +10,10 @@ CONFIG += c++20
 
 SOURCES += \
     autoplay.cpp \
+    defaultautoplaystrategy.cpp \
     gamecontroller.cpp \
     gamemodel.cpp \
+    gamestatemanager.cpp \
     gameview.cpp \
     main.cpp \
     mainwindow.cpp \
@@ -19,10 +21,13 @@ SOURCES += \
 
 HEADERS += \
     autoplay.h \
+    autoplaystrategy.h \
     commandparser.h \
+    defaultautoplaystrategy.h \
     enemy.h \
     gamecontroller.h \
     gamemodel.h \
+    gamestatemanager.h \
     gameview.h \
     healthpack.h \
     mainwindow.h \

@@ -16,8 +16,9 @@
 #include "pathfinder_class.h"
 #include "node.h"
 #include "commandparser.h"
-#include "xenemy.h"
-#include "penemy.h"
+#include "autoplaystrategy.h"
+#include "defaultautoplaystrategy.h"
+#include "gamestatemanager.h" // NEW
 
 class GameController : public QMainWindow
 {
@@ -66,47 +67,12 @@ private:
     void checkForPortal();
     void handlePEnemyPoison(PEnemy *pEnemy);
 
-    // Pathfinding/auto-play
-    void decideNextAction();
-    EnemyWrapper* findNextTargetEnemy();
-    void planPathToEnemy(EnemyWrapper* targetEnemy);
-    void planPathToHealthPack();
-    void planPathToPortal();
-    void planPathToEnemyWithHealthPacks(EnemyWrapper* targetEnemy);
-    void resetNodes();
+    bool autoPlayActive = false;
+    bool oneShotMovement = false;
 
-    bool autoPlayActive = false;    // tracks if auto-play is currently active
-    bool oneShotMovement = false;   // true if we are just moving to a clicked tile once
+    // Removed direct implementation of these methods from controller
 
-    bool saveGameToFile(const QString &fileName);
-    bool loadGameFromFile(const QString &fileName);
-
-    struct CachedLevel {
-        std::vector<std::unique_ptr<TileWrapper>> tiles;
-        std::unique_ptr<ProtagonistWrapper> protagonist;
-        std::vector<std::unique_ptr<EnemyWrapper>> enemies;
-        std::vector<std::unique_ptr<HealthPack>> healthPacks;
-        std::vector<std::unique_ptr<Portal>> portals;
-        int rows;
-        int cols;
-
-        // We'll store in QMap<int,std::shared_ptr<CachedLevel>>.
-
-    };
-
-    // We'll store cached levels as shared_ptr to avoid copying unique_ptr problems:
-    QMap<int, std::shared_ptr<CachedLevel>> levelCache;
-
-    void loadLevelFromCache(int level);
-    void cacheCurrentLevel(int level);
-
-    // clone functions - declare them now:
-    std::vector<std::unique_ptr<TileWrapper>> cloneTiles(const std::vector<std::unique_ptr<TileWrapper>> &source);
-    std::vector<std::unique_ptr<EnemyWrapper>> cloneEnemies(const std::vector<std::unique_ptr<EnemyWrapper>> &source);
-    std::vector<std::unique_ptr<HealthPack>> cloneHealthPacks(const std::vector<std::unique_ptr<HealthPack>> &source);
-    std::vector<std::unique_ptr<Portal>> clonePortals(const std::vector<std::unique_ptr<Portal>> &source);
-
-    void convertRandomEnemiesToXEnemies(std::vector<std::unique_ptr<EnemyWrapper>> &enemies, int cols, int rows);
+    QMap<int, std::shared_ptr<GameStateManager::CachedLevel>> levelCache; // updated type
 
     GameModel *model;
     GameView *graphicView;
@@ -124,16 +90,12 @@ private:
 
     QTimer *autoPlayTimer;
 
-    std::vector<int> autoPath;
-    int autoPathIndex;
-
-    enum class TargetType { None, Enemy, HealthPack, Portal };
-    TargetType currentTarget;
-
-    std::vector<Node> nodes;
-    Comparator<Node> nodeComparator;
-
     CommandParser commandParser;
+
+    std::unique_ptr<AutoPlayStrategy> autoPlayStrategy;
+
+    // NEW: Use GameStateManager
+    GameStateManager gameStateManager;
 };
 
 #endif // GAMECONTROLLER_H
