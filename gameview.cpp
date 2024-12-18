@@ -336,21 +336,30 @@ void GameView::graphicsViewKeyPressEvent(QKeyEvent *event)
 
 void GameView::graphicsViewWheelEvent(QWheelEvent *event)
 {
-    qreal x = event->position().x();
-    qreal y = event->position().y();
-    QPointF before = graphicsView->mapToScene(QPoint((int)x,(int)y));
-    double scaleFactor = 1.15;
-    if (event->angleDelta().y()>0) {
-        graphicsView->scale(scaleFactor, scaleFactor);
+    // Only zoom if Ctrl is pressed
+    if (event->modifiers() & Qt::ControlModifier) {
+        qreal x = event->position().x();
+        qreal y = event->position().y();
+        QPointF before = graphicsView->mapToScene(QPoint((int)x,(int)y));
+
+        double scaleFactor = 1.15;
+        if (event->angleDelta().y() > 0) {
+            graphicsView->scale(scaleFactor, scaleFactor);
+        } else {
+            graphicsView->scale(1.0 / scaleFactor, 1.0 / scaleFactor);
+        }
+
+        QPointF after = graphicsView->mapToScene(QPoint((int)x,(int)y));
+        QPointF offset = before - after;
+        graphicsView->horizontalScrollBar()->setValue(graphicsView->horizontalScrollBar()->value() + offset.x());
+        graphicsView->verticalScrollBar()->setValue(graphicsView->verticalScrollBar()->value() + offset.y());
+        event->accept();
     } else {
-        graphicsView->scale(1.0/scaleFactor,1.0/scaleFactor);
+        // If Ctrl is not pressed, do nothing
+        event->ignore();
     }
-    QPointF after = graphicsView->mapToScene(QPoint((int)x,(int)y));
-    QPointF offset = before - after;
-    graphicsView->horizontalScrollBar()->setValue(graphicsView->horizontalScrollBar()->value()+offset.x());
-    graphicsView->verticalScrollBar()->setValue(graphicsView->verticalScrollBar()->value()+offset.y());
-    event->accept();
 }
+
 
 void GameView::mousePressEvent(QMouseEvent *event)
 {
