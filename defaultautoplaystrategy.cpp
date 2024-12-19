@@ -61,22 +61,19 @@ void DefaultAutoPlayStrategy::decideNextAction() {
 
     if (targetEnemy) {
         float enemyDamage = targetEnemy->getStrength();
-        // Complex logic: can we handle enemy directly or need health first?
+        // Need health or not
         if (p->getHealth() <= enemyDamage) {
             // Need health pack first
             if (!computePathToHealthPack()) {
-                // No HP found => try enemy anyway
+                // no HP found => just try enemy anyway
                 computePathToEnemy();
                 currentTarget = TargetType::Enemy;
             } else {
                 currentTarget = TargetType::HealthPack;
             }
         } else if (p->getHealth() < 70.0f) {
-            // Try path that includes health packs (not implemented separately here)
-            // We'll just do enemy path or health pack path first
-            // For simplicity, first get health if possible
+            // Try health pack first if possible
             if (!computePathToHealthPack()) {
-                // no HP found, just go enemy
                 computePathToEnemy();
                 currentTarget = TargetType::Enemy;
             } else {
@@ -88,15 +85,16 @@ void DefaultAutoPlayStrategy::decideNextAction() {
             currentTarget = TargetType::Enemy;
         }
     } else {
-        // No enemy => go to portal
-        if (computePathToPortal())
+        // No enemy alive
+        // Only compute path to portal if no enemies
+        if (computePathToPortal()) {
             currentTarget = TargetType::Portal;
-        else
+        } else {
             currentTarget = TargetType::None;
+        }
     }
 }
 
-// Compute-only methods
 bool DefaultAutoPlayStrategy::computePathToEnemy() {
     EnemyWrapper* e = findNextTargetEnemy();
     if (!e) {
@@ -110,18 +108,30 @@ bool DefaultAutoPlayStrategy::computePathToEnemy() {
     Node &startNode = nodes[p->getYPos()*cols + p->getXPos()];
     Node &endNode = nodes[e->getYPos()*cols + e->getXPos()];
 
-    // cost function: avoid undefeated enemies (except the target one)
-    auto costFunc = [this, e](const Node &a, const Node &b) {
+    // Avoid portal if enemies remain
+    bool enemiesAlive = (findNextTargetEnemy() != nullptr);
+
+    auto costFunc = [this, e, enemiesAlive](const Node &a, const Node &b) {
         for (auto &enemy : model->getEnemies()) {
             if (!enemy->isDefeated() && enemy.get() != e &&
                 enemy->getXPos()==b.getXPos() && enemy->getYPos()==b.getYPos()) {
                 return std::numeric_limits<float>::infinity();
             }
         }
+        // Avoid portal if enemies still alive
+        if (enemiesAlive) {
+            for (auto &port : model->getPortals()) {
+                if (port->getXPos()==b.getXPos() && port->getYPos()==b.getYPos()) {
+                    return std::numeric_limits<float>::infinity();
+                }
+            }
+        }
+
         return defaultCostFunc(b);
     };
 
     auto heuristicFunc = defaultHeuristicFunc;
+
     autoPath = findPath(startNode.getXPos(), startNode.getYPos(),
                         endNode.getXPos(), endNode.getYPos(),
                         costFunc, heuristicFunc);
@@ -149,14 +159,23 @@ bool DefaultAutoPlayStrategy::computePathToHealthPack() {
         return false;
     }
 
+    bool enemiesAlive = (findNextTargetEnemy() != nullptr);
+
     int cols = model->getCols();
     Node &startNode = nodes[p->getYPos()*cols + p->getXPos()];
     Node &endNode = nodes[nearestHP->getYPos()*cols + nearestHP->getXPos()];
 
-    auto costFunc = [this](const Node &a, const Node &b) {
+    auto costFunc = [this, enemiesAlive](const Node &a, const Node &b) {
         for (auto &e : model->getEnemies()) {
             if(!e->isDefeated() && e->getXPos()==b.getXPos() && e->getYPos()==b.getYPos()) {
                 return std::numeric_limits<float>::infinity();
+            }
+        }
+        if (enemiesAlive) {
+            for (auto &port : model->getPortals()) {
+                if (port->getXPos()==b.getXPos() && port->getYPos()==b.getYPos()) {
+                    return std::numeric_limits<float>::infinity();
+                }
             }
         }
         return defaultCostFunc(b);
@@ -172,6 +191,7 @@ bool DefaultAutoPlayStrategy::computePathToHealthPack() {
 
 bool DefaultAutoPlayStrategy::computePathToPortal() {
     resetNodes();
+    // If no portals or enemies alive (this method only called if no enemies), just go portal
     if (model->getPortals().empty()) {
         autoPath.clear();
         return false;
@@ -183,12 +203,24 @@ bool DefaultAutoPlayStrategy::computePathToPortal() {
     Node &startNode = nodes[p->getYPos()*cols + p->getXPos()];
     Node &endNode = nodes[portal->getYPos()*cols + portal->getXPos()];
 
-    auto costFunc = [this](const Node &a, const Node &b) {
+    // If decideNextAction calls computePathToPortal, it means no enemies alive, so no need to avoid portal
+    bool enemiesAlive = (findNextTargetEnemy() != nullptr);
+
+    auto costFunc = [this, enemiesAlive](const Node &a, const Node &b) {
         for (auto &e : model->getEnemies()) {
             if (!e->isDefeated() && e->getXPos()==b.getXPos() && e->getYPos()==b.getYPos()) {
                 return std::numeric_limits<float>::infinity();
             }
         }
+        // If by any chance enemiesAlive is true here, avoid portal:
+        if (enemiesAlive) {
+            for (auto &port : model->getPortals()) {
+                if (port->getXPos()==b.getXPos() && port->getYPos()==b.getYPos()) {
+                    return std::numeric_limits<float>::infinity();
+                }
+            }
+        }
+
         return defaultCostFunc(b);
     };
     auto heuristicFunc = defaultHeuristicFunc;
@@ -208,16 +240,27 @@ bool DefaultAutoPlayStrategy::computePathToTile(int x, int y) {
         return false;
     }
 
+    bool enemiesAlive = (findNextTargetEnemy() != nullptr);
+
     int cols = model->getCols();
     Node &startNode = nodes[p->getYPos()*cols + p->getXPos()];
     Node &endNode = nodes[y*cols + x];
 
-    auto costFunc = [this](const Node &a, const Node &b) {
+    auto costFunc = [this, enemiesAlive](const Node &a, const Node &b) {
         for (auto &e : model->getEnemies()) {
             if (!e->isDefeated() && e->getXPos()==b.getXPos() && e->getYPos()==b.getYPos()) {
                 return std::numeric_limits<float>::infinity();
             }
         }
+        // Avoid portal if enemies alive
+        if (enemiesAlive) {
+            for (auto &port : model->getPortals()) {
+                if (port->getXPos()==b.getXPos() && port->getYPos()==b.getYPos()) {
+                    return std::numeric_limits<float>::infinity();
+                }
+            }
+        }
+
         return defaultCostFunc(b);
     };
     auto heuristicFunc = defaultHeuristicFunc;
@@ -255,12 +298,10 @@ void DefaultAutoPlayStrategy::resetNodes() {
 
     for (auto &tw : tiles) {
         Node n(tw->getXPos(), tw->getYPos(), tw->getValue());
+        n.f = n.g = n.h = 0;
+        n.visited = n.closed = false;
+        n.prev = nullptr;
         nodes.push_back(n);
-    }
-    for (auto &node : nodes) {
-        node.f = node.g = node.h = 0;
-        node.visited = node.closed = false;
-        node.prev = nullptr;
     }
 }
 
@@ -278,7 +319,6 @@ std::vector<int> DefaultAutoPlayStrategy::findPath(
 }
 
 float DefaultAutoPlayStrategy::defaultCostFunc(const Node &b) {
-    // Default energy cost
     return 1.0f/(b.getValue()+1.0f)*0.1f;
 }
 

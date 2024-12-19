@@ -20,7 +20,9 @@
 GameController::GameController(QWidget *parent)
     : QMainWindow(parent),
     model(new GameModel(this)),
-    autoPlayTimer(new QTimer(this))
+    autoPlayTimer(new QTimer(this)),
+    commandMoveTimer(new QTimer(this)),
+    commandPathIndex(0)
 {
     std::function<bool(const Node&, const Node&)> nodeComparator = [](const Node &a, const Node &b) {
         return a.f > b.f;
@@ -34,6 +36,10 @@ GameController::GameController(QWidget *parent)
     createActions();
     createMenus();
     setupCommands();
+
+    // commandMoveTimer setup
+    commandMoveTimer->setInterval(300); // Slightly faster or similar speed as autoplay
+    connect(commandMoveTimer, &QTimer::timeout, this, &GameController::handleCommandMoveStep);
 }
 
 GameController::~GameController()
@@ -67,6 +73,7 @@ void GameController::setupConnections()
     connect(model, &GameModel::gameOver, this, [this](){
         QMessageBox::information(this, "Game Over", "Game Over!");
         stopAutoPlay();
+        commandMoveTimer->stop();
     });
 
     connect(autoPlayTimer, &QTimer::timeout, this, &GameController::handleAutoPlayStep);
@@ -74,6 +81,7 @@ void GameController::setupConnections()
     connect(textView, &TextGameView::commandEntered, this, &GameController::handleTextCommand);
 
     connect(graphicView, &GameView::moveRequest, this, [this](int dx, int dy){
+        // Manual move using arrow keys (or UI buttons)
         moveProtagonist(dx, dy);
     });
     connect(graphicView, &GameView::autoPlayRequest, this, &GameController::startAutoPlay);
@@ -127,8 +135,15 @@ void GameController::setupCommands()
             gotoXY(x,y);
         }
     });
-    commandParser.addCommand("attack nearest enemy", [this](QStringList){ attackNearestEnemy(); });
-    commandParser.addCommand("take nearest health pack", [this](QStringList){ takeNearestHealthPack(); });
+
+    commandParser.addCommand("attack nearest enemy", [this](QStringList){
+        attackNearestEnemy();
+    });
+
+    commandParser.addCommand("take nearest health pack", [this](QStringList){
+        takeNearestHealthPack();
+    });
+
     commandParser.addCommand("help", [this](QStringList){ printHelp(); });
 }
 
@@ -152,41 +167,64 @@ void GameController::moveRight() { moveProtagonist(1, 0); }
 void GameController::gotoXY(int x, int y)
 {
     stopAutoPlay();
-    autoPlayStrategy->start(model);
-    autoPlayStrategy->planPathToTile(x,y);
-    startAutoPlay();
+    commandMoveTimer->stop();
+    // Direct path movement to (x,y) with animation
+    std::vector<int> path = computeDirectPath(model->getProtagonist()->getXPos(),
+                                              model->getProtagonist()->getYPos(),
+                                              x,y);
+    if (!path.empty()) {
+        startCommandPathMovement(path);
+    } else {
+        textView->appendMessage("No path found to the specified tile.");
+    }
 }
 
 void GameController::attackNearestEnemy()
 {
-    // Stop any ongoing autoplay and clear old paths
     stopAutoPlay();
-    autoPlayStrategy->start(model);
+    commandMoveTimer->stop();
 
-    // Compute path to nearest enemy (once)
-    bool success = dynamic_cast<DefaultAutoPlayStrategy*>(autoPlayStrategy.get())->computePathToEnemy();
-    if (success) {
-        oneShotMovement = true;
-        startAutoPlay(); // Follow this path once
-        textView->appendMessage("Moving towards enemy...");
-    } else {
+    EnemyWrapper* e = findNearestUndefeatedEnemy();
+    if (!e) {
         textView->appendMessage("No enemies found.");
+        return;
     }
+
+    auto *p = model->getProtagonist();
+    std::vector<int> path = computeDirectPath(p->getXPos(), p->getYPos(),
+                                              e->getXPos(), e->getYPos(),
+                                              true /*avoid portal if enemies remain*/);
+    if (path.empty()) {
+        textView->appendMessage("No path found to the nearest enemy.");
+        return;
+    }
+
+    textView->appendMessage("Moving towards enemy...");
+    startCommandPathMovement(path);
 }
 
 void GameController::takeNearestHealthPack()
 {
     stopAutoPlay();
-    autoPlayStrategy->start(model);
+    commandMoveTimer->stop();
 
-    bool success = dynamic_cast<DefaultAutoPlayStrategy*>(autoPlayStrategy.get())->computePathToHealthPack();
-    if (success) {
-        oneShotMovement = true;
-        startAutoPlay(); // Follow this path once
-        textView->appendMessage("Moving towards health pack...");
-    } else {
+    HealthPack* hp = findNearestHealthPack();
+    if (!hp) {
         textView->appendMessage("No health packs found.");
+        return;
     }
+
+    auto *p = model->getProtagonist();
+    std::vector<int> path = computeDirectPath(p->getXPos(), p->getYPos(),
+                                              hp->getXPos(), hp->getYPos(),
+                                              true /*avoid portal if enemies remain*/);
+    if (path.empty()) {
+        textView->appendMessage("No path found to the nearest health pack.");
+        return;
+    }
+
+    textView->appendMessage("Moving towards health pack...");
+    startCommandPathMovement(path);
 }
 
 void GameController::switchView()
@@ -197,6 +235,9 @@ void GameController::switchView()
 
 void GameController::startAutoPlay()
 {
+    // Stop any manual command movements
+    commandMoveTimer->stop();
+
     if (autoPlayActive) {
         stopAutoPlay();
         return;
@@ -208,6 +249,7 @@ void GameController::startAutoPlay()
         return;
     }
 
+    autoPlayStrategy->start(model);
     autoPlayStrategy->decideNextAction();
     autoPlayActive = true;
     autoPlayTimer->start(500);
@@ -233,33 +275,25 @@ void GameController::handleAutoPlayStep()
     AutoPlayMove move = autoPlayStrategy->nextStep();
 
     if (move.dx == 0 && move.dy == 0) {
-        // No steps left in the current path
-        if (oneShotMovement) {
-            // If this was a single action (mouse click or one-shot command), just stop
+        // No steps in current path, decide next action
+        autoPlayStrategy->decideNextAction();
+        move = autoPlayStrategy->nextStep();
+        if (move.dx == 0 && move.dy == 0) {
+            // Still no steps: stop autoplay
             stopAutoPlay();
             return;
-        } else {
-            // Full auto-play mode: try the next action
-            autoPlayStrategy->decideNextAction();
-            move = autoPlayStrategy->nextStep();
-            if (move.dx == 0 && move.dy == 0) {
-                // Still no steps: stop autoplay
-                stopAutoPlay();
-                return;
-            }
         }
     }
 
     // Perform the move
     moveProtagonist(move.dx, move.dy);
 
-    // Check after move if protagonist died
+    // Check if protagonist died after move
     if (p->getHealth() <= 0 || p->getEnergy() <= 0) {
         stopAutoPlay();
         emit model->gameOver();
     }
 }
-
 
 void GameController::saveGame()
 {
@@ -288,6 +322,7 @@ void GameController::loadGame()
 void GameController::newGame()
 {
     stopAutoPlay();
+    commandMoveTimer->stop();
     if (!gameStateManager.newGame(model, levelCache)) {
         qWarning() << "Failed to start new game.";
     }
@@ -296,6 +331,7 @@ void GameController::newGame()
 void GameController::restartGame()
 {
     stopAutoPlay();
+    commandMoveTimer->stop();
     if (!gameStateManager.restartGame(model, levelCache)) {
         qWarning() << "Failed to restart game.";
     }
@@ -334,10 +370,12 @@ void GameController::moveProtagonist(int dx, int dy)
                 if (p->getHealth() <= 0 || p->getEnergy() <= 0) {
                     emit model->gameOver();
                     stopAutoPlay();
+                    commandMoveTimer->stop();
                 }
             } else {
                 emit model->gameOver();
                 stopAutoPlay();
+                commandMoveTimer->stop();
             }
         }
     }
@@ -351,26 +389,20 @@ void GameController::checkForEncounters()
             if (auto xE = dynamic_cast<XEnemyWrapper*>(e.get())) {
                 // XEnemy logic:
                 if (xE->getTimesHit() == 0) {
-                    // First encounter: Teleport, no damage
-                    // Just call hit once
                     xE->hit();
                     emit model->modelUpdated();
                 } else if (xE->getTimesHit() == 1) {
-                    // Second encounter:
-                    // damage as normal enemy
                     float healthCost = e->getStrength();
                     float newHealth = p->getHealth() - healthCost;
                     if (newHealth > 0) {
-                        // Protagonist survives second encounter damage
                         p->setHealth(newHealth);
-                        // Now defeat the XEnemy with a second hit
-                        xE->hit(); // This sets it defeated
+                        xE->hit(); // second hit defeats XEnemy
                         emit model->modelUpdated();
                     } else {
-                        // Protagonist dies
                         p->setHealth(0);
                         emit model->gameOver();
                         stopAutoPlay();
+                        commandMoveTimer->stop();
                     }
                 }
             } else {
@@ -389,16 +421,13 @@ void GameController::checkForEncounters()
                     p->setHealth(0);
                     emit model->gameOver();
                     stopAutoPlay();
+                    commandMoveTimer->stop();
                 }
             }
             break;
         }
     }
 }
-
-
-
-
 
 void GameController::checkForHealthPacks()
 {
@@ -419,18 +448,31 @@ void GameController::checkForHealthPacks()
 void GameController::checkForPortal()
 {
     auto *p = model->getProtagonist();
+    bool anyEnemyAlive = false;
+    for (auto &e : model->getEnemies()) {
+        if (!e->isDefeated()) {
+            anyEnemyAlive = true;
+            break;
+        }
+    }
+
     auto &ports = const_cast<std::vector<std::unique_ptr<Portal>>&>(model->getPortals());
     for (auto &portal : ports) {
         if (portal->getXPos() == p->getXPos() && portal->getYPos() == p->getYPos()) {
-            int lvl = model->getCurrentLevel();
-            lvl++;
-            if (lvl < model->getLevelFiles().size()) {
-                stopAutoPlay();
-                model->setCurrentLevel(lvl);
-                gameStateManager.newGame(model, levelCache);
-                emit model->modelUpdated();
+            if (!anyEnemyAlive) {
+                int lvl = model->getCurrentLevel();
+                lvl++;
+                if (lvl < (int)model->getLevelFiles().size()) {
+                    stopAutoPlay();
+                    commandMoveTimer->stop();
+                    model->setCurrentLevel(lvl);
+                    gameStateManager.newGame(model, levelCache);
+                    emit model->modelUpdated();
+                } else {
+                    emit model->gameOver();
+                }
             } else {
-                emit model->gameOver();
+                // If enemies remain, do nothing, protagonist stays on portal tile
             }
             break;
         }
@@ -454,6 +496,7 @@ void GameController::handlePEnemyPoison(PEnemy *pEnemy)
                 if (newHealth <= 0) {
                     emit model->gameOver();
                     stopAutoPlay();
+                    commandMoveTimer->stop();
                 }
             }
         }
@@ -462,16 +505,152 @@ void GameController::handlePEnemyPoison(PEnemy *pEnemy)
 
 void GameController::onTileSelected(int x, int y)
 {
-    // Stop current autoplay and start fresh
     stopAutoPlay();
-    autoPlayStrategy->start(model);
+    commandMoveTimer->stop();
+    moveProtagonistDirectlyToTile(x,y);
+}
 
-    // Compute path to the clicked tile
-    bool success = dynamic_cast<DefaultAutoPlayStrategy*>(autoPlayStrategy.get())->computePathToTile(x,y);
-    if (success) {
-        oneShotMovement = true; // Follow just this path
-        startAutoPlay();
+void GameController::moveProtagonistDirectlyToTile(int x, int y)
+{
+    auto *p = model->getProtagonist();
+    std::vector<int> path = computeDirectPath(p->getXPos(), p->getYPos(), x, y, true);
+    if (!path.empty()) {
+        startCommandPathMovement(path);
     } else {
         qDebug() << "No path found to the selected tile.";
     }
+}
+
+std::vector<int> GameController::computeDirectPath(int startX, int startY, int endX, int endY, bool avoidPortalIfEnemies)
+{
+    std::vector<Node> nodes;
+    const auto &tiles = model->getTiles();
+    nodes.reserve(tiles.size());
+    int cols = model->getCols();
+    int rows = model->getRows();
+
+    bool enemiesAlive = false;
+    for (auto &e : model->getEnemies()) {
+        if (!e->isDefeated()) {
+            enemiesAlive = true;
+            break;
+        }
+    }
+
+    for (auto &tw : tiles) {
+        Node n(tw->getXPos(), tw->getYPos(), tw->getValue());
+        n.f = n.g = n.h = 0.0f;
+        n.visited = n.closed = false;
+        n.prev = nullptr;
+        nodes.push_back(n);
+    }
+
+    if (endX < 0 || endX >= cols || endY < 0 || endY >= rows) {
+        return {};
+    }
+
+    Node &startNode = nodes[startY*cols + startX];
+    Node &endNode   = nodes[endY*cols + endX];
+
+    auto costFunc = [this, enemiesAlive, avoidPortalIfEnemies](const Node &a, const Node &b) {
+        for (auto &e : model->getEnemies()) {
+            if (!e->isDefeated() && e->getXPos() == b.getXPos() && e->getYPos() == b.getYPos()) {
+                return std::numeric_limits<float>::infinity();
+            }
+        }
+        if (enemiesAlive && avoidPortalIfEnemies) {
+            for (auto &port : model->getPortals()) {
+                if (port->getXPos()==b.getXPos() && port->getYPos()==b.getYPos()) {
+                    return std::numeric_limits<float>::infinity();
+                }
+            }
+        }
+
+        float val = b.getValue();
+        return 1.0f/(val+1.0f)*0.1f;
+    };
+
+    auto heuristicFunc = [](const Node &a, const Node &b) {
+        return std::sqrt((a.getXPos()-b.getXPos())*(a.getXPos()-b.getXPos())
+                         + (a.getYPos()-b.getYPos())*(a.getYPos()-b.getYPos()));
+    };
+
+    std::function<bool(const Node&, const Node&)> nodeComparator = [](const Node &A, const Node &B){
+        return A.f > B.f;
+    };
+
+    PathFinder<Node, Node> pathfinder(nodes, &startNode, &endNode, nodeComparator, (unsigned int)cols, costFunc, heuristicFunc, 1.0f);
+    return pathfinder.A_star();
+}
+
+// New method to start the animated command-based movement
+void GameController::startCommandPathMovement(const std::vector<int> &path)
+{
+    commandPath = path;
+    commandPathIndex = 0;
+    commandMoveTimer->start();
+}
+
+void GameController::handleCommandMoveStep()
+{
+    if (commandPathIndex >= (int)commandPath.size()) {
+        // Done with movement
+        commandMoveTimer->stop();
+        return;
+    }
+
+    int move = commandPath[commandPathIndex++];
+    int dx=0,dy=0;
+    switch(move) {
+    case 0: dy = -1; break;
+    case 1: dx = 1; dy = -1; break;
+    case 2: dx = 1; break;
+    case 3: dx = 1; dy = 1; break;
+    case 4: dy = 1; break;
+    case 5: dx = -1; dy = 1; break;
+    case 6: dx = -1; break;
+    case 7: dx = -1; dy = -1; break;
+    }
+
+    moveProtagonist(dx,dy);
+
+    auto *p = model->getProtagonist();
+    if (p->getHealth() <= 0 || p->getEnergy() <= 0) {
+        // Movement ended due to death
+        commandMoveTimer->stop();
+    }
+}
+
+EnemyWrapper* GameController::findNearestUndefeatedEnemy()
+{
+    EnemyWrapper* targetEnemy = nullptr;
+    float minDist = std::numeric_limits<float>::max();
+    auto *p = model->getProtagonist();
+    for (auto &e : model->getEnemies()) {
+        if (!e->isDefeated()) {
+            float dist = std::sqrt((e->getXPos() - p->getXPos())*(e->getXPos()-p->getXPos())
+                                   + (e->getYPos() - p->getYPos())*(e->getYPos()-p->getYPos()));
+            if (dist < minDist) {
+                minDist = dist;
+                targetEnemy = e.get();
+            }
+        }
+    }
+    return targetEnemy;
+}
+
+HealthPack* GameController::findNearestHealthPack()
+{
+    HealthPack* nearestHP = nullptr;
+    float minDist = std::numeric_limits<float>::max();
+    auto *p = model->getProtagonist();
+    for (auto &hp : model->getHealthPacks()) {
+        float dist = std::sqrt((hp->getXPos()-p->getXPos())*(hp->getXPos()-p->getXPos())
+                               + (hp->getYPos()-p->getYPos())*(hp->getYPos()-p->getYPos()));
+        if (dist < minDist) {
+            minDist = dist;
+            nearestHP = hp.get();
+        }
+    }
+    return nearestHP;
 }

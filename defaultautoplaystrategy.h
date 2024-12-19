@@ -20,18 +20,9 @@ public:
     void stop() override;
     AutoPlayMove nextStep() override;
 
-    // Decide next action based on conditions (if used in full auto-play mode)
     void decideNextAction() override;
 
-    // Direct compute path methods (no logic beyond finding the path):
-    bool computePathToEnemy();        // Finds path to nearest enemy
-    bool computePathToHealthPack();   // Finds path to nearest health pack
-    bool computePathToPortal();       // Finds path to portal
-    bool computePathToTile(int x, int y);
-
-
     void planPathToTile(int x, int y) override {
-        // For compatibility with interface
         computePathToTile(x,y);
     }
 
@@ -65,12 +56,15 @@ private:
     EnemyWrapper* findNextTargetEnemy();
     void resetNodes();
 
-    // Path planning helpers
+    bool computePathToEnemy();
+    bool computePathToHealthPack();
+    bool computePathToPortal();
+    bool computePathToTile(int x, int y);
+
     std::vector<int> findPath(int startX, int startY, int endX, int endY,
                               std::function<float(const Node&,const Node&)> costFunc,
                               std::function<float(const Node&,const Node&)> heuristicFunc);
 
-    // Heuristic and cost functions reused in multiple methods
     float defaultCostFunc(const Node &b);
     static float defaultHeuristicFunc(const Node &a, const Node &b);
 };
