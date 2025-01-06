@@ -17,6 +17,7 @@ public:
         std::vector<std::unique_ptr<Portal>> portals;
         int rows;
         int cols;
+        QPoint forwardPortalCoord = QPoint(-1, -1);
     };
 
     GameStateManager() = default;
@@ -37,7 +38,7 @@ public:
     void loadLevelFromCache(GameModel *model, QMap<int, std::shared_ptr<CachedLevel>> &levelCache, int level);
 
     // Cache current level
-    void cacheCurrentLevel(GameModel *model, QMap<int, std::shared_ptr<CachedLevel>> &levelCache, int level);
+    void cacheCurrentLevel(GameModel *model, QMap<int, std::shared_ptr<CachedLevel>> &levelCache, int level, const QPoint &forwardPortalCoord);
 
 private:
     // clone helper functions
@@ -48,6 +49,12 @@ private:
 
     // Randomly convert some enemies to XEnemies
     void convertRandomEnemiesToXEnemies(GameModel *model, std::vector<std::unique_ptr<EnemyWrapper>> &enemies, int cols, int rows);
+
+    QPoint pickRandomValidTile(
+        const std::vector<std::unique_ptr<TileWrapper>> &tiles,
+        int rows,
+        int cols
+        );
 };
 
 #endif // GAMESTATEMANAGER_H

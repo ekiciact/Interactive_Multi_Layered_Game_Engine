@@ -251,6 +251,7 @@ void GameController::startAutoPlay()
 
     auto *p = model->getProtagonist();
     if (p->getHealth() <= 0 || p->getEnergy() <= 0) {
+        qDebug() << "GAME OVER1";
         emit model->gameOver();
         return;
     }
@@ -274,6 +275,7 @@ void GameController::handleAutoPlayStep()
     auto *p = model->getProtagonist();
     if (p->getHealth() <= 0 || p->getEnergy() <= 0) {
         stopAutoPlay();
+        qDebug() << "GAME OVER2";
         emit model->gameOver();
         return;
     }
@@ -297,6 +299,7 @@ void GameController::handleAutoPlayStep()
     // Check if protagonist died after move
     if (p->getHealth() <= 0 || p->getEnergy() <= 0) {
         stopAutoPlay();
+        qDebug() << "GAME OVER3";
         emit model->gameOver();
     }
 }
@@ -373,12 +376,14 @@ void GameController::moveProtagonist(int dx, int dy)
                 checkForPortal();
                 emit model->modelUpdated();
 
-                if (p->getHealth() <= 0 || p->getEnergy() <= 0) {
+                if (model->getProtagonist()->getHealth() <= 0 || model->getProtagonist()->getHealth() <= 0) {
+                    qDebug() << "GAME OVER4";
                     emit model->gameOver();
                     stopAutoPlay();
                     commandMoveTimer->stop();
                 }
             } else {
+                qDebug() << "GAME OVER5";
                 emit model->gameOver();
                 stopAutoPlay();
                 commandMoveTimer->stop();
@@ -406,6 +411,7 @@ void GameController::checkForEncounters()
                         emit model->modelUpdated();
                     } else {
                         p->setHealth(0);
+                        qDebug() << "GAME OVER6";
                         emit model->gameOver();
                         stopAutoPlay();
                         commandMoveTimer->stop();
@@ -425,6 +431,7 @@ void GameController::checkForEncounters()
                     emit model->modelUpdated();
                 } else {
                     p->setHealth(0);
+                    qDebug() << "GAME OVER7";
                     emit model->gameOver();
                     stopAutoPlay();
                     commandMoveTimer->stop();
@@ -465,25 +472,29 @@ void GameController::checkForPortal()
     auto &ports = const_cast<std::vector<std::unique_ptr<Portal>>&>(model->getPortals());
     for (auto &portal : ports) {
         if (portal->getXPos() == p->getXPos() && portal->getYPos() == p->getYPos()) {
-            if (!anyEnemyAlive) {
-                int lvl = model->getCurrentLevel();
-                lvl++;
-                if (lvl < (int)model->getLevelFiles().size()) {
-                    stopAutoPlay();
-                    commandMoveTimer->stop();
-                    model->setCurrentLevel(lvl);
-                    gameStateManager.newGame(model, levelCache);
-                    emit model->modelUpdated();
-                } else {
+            if (anyEnemyAlive) {
+                int targetLvl = portal->getTargetLevel();
+                int targetX = portal->getTargetX();
+                int targetY = portal->getTargetY();
+
+                if (targetLvl < 0 || targetLvl >= static_cast<int>(model->getLevelFiles().size())) {
+                    qDebug() << "GAME OVER8";
                     emit model->gameOver();
+                    return;
                 }
-            } else {
-                // If enemies remain, do nothing, protagonist stays on portal tile
+                stopAutoPlay();
+                commandMoveTimer->stop();
+                model->setCurrentLevel(targetLvl);
+                gameStateManager.newGame(model, levelCache);
+                model->getProtagonist()->setPos(targetX, targetY);
+
+                emit model->modelUpdated();
+                break;
             }
-            break;
         }
     }
 }
+
 
 void GameController::handlePEnemyPoison(PEnemy *pEnemy)
 {
@@ -500,6 +511,7 @@ void GameController::handlePEnemyPoison(PEnemy *pEnemy)
                 float newHealth = prot->getHealth() - 5.0f;
                 prot->setHealth(newHealth);
                 if (newHealth <= 0) {
+                    qDebug() << "GAME OVER10";
                     emit model->gameOver();
                     stopAutoPlay();
                     commandMoveTimer->stop();

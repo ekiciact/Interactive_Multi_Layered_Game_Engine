@@ -17,6 +17,7 @@
 bool GameStateManager::newGame(GameModel *model, QMap<int, std::shared_ptr<CachedLevel>> &levelCache)
 {
     int lvl = model->getCurrentLevel();
+
     if (levelCache.contains(lvl)) {
         loadLevelFromCache(model, levelCache, lvl);
         emit model->modelReset();
@@ -66,50 +67,81 @@ bool GameStateManager::newGame(GameModel *model, QMap<int, std::shared_ptr<Cache
         hpWrappers.push_back(std::make_unique<HealthPack>(std::move(hp)));
     }
 
-    // Place a portal randomly
-    {
-        std::random_device rd;
-        std::mt19937 gen(rd());
-        std::uniform_int_distribution<> distX(0, cols - 1);
-        std::uniform_int_distribution<> distY(0, rows - 1);
-        bool portalPlaced = false;
-        std::vector<std::unique_ptr<Portal>> portalWrappers;
-        while (!portalPlaced) {
-            int x = distX(gen);
-            int y = distY(gen);
-            TileWrapper* tile = nullptr;
-            for (auto &tw : tileWrappers) {
-                if (tw->getXPos() == x && tw->getYPos() == y) {
-                    tile = tw.get();
-                    break;
+    // portal stuff
+    int totalLevels = model->getLevelFiles().size();
+    bool hasNext = (lvl < totalLevels - 1);     // Not the last level
+    bool hasPrevious = (lvl > 0);
+
+    std::vector<std::unique_ptr<Portal>> portalWrappers; // local to store portals
+
+
+    QPoint randCoord = pickRandomValidTile(
+        tileWrappers,
+        rows,
+        cols
+        );
+    auto forwardTile = std::make_unique<Tile>(randCoord.x(), randCoord.y(), 0.0f);
+    portalWrappers.push_back(std::make_unique<Portal>(std::move(forwardTile), lvl+1,0,0));
+
+    if (hasPrevious) {
+        auto prevCached = levelCache.value(lvl - 1, nullptr);
+        QPoint prevForwardCoord(-1, -1);
+        if (prevCached) {
+            prevForwardCoord = prevCached->forwardPortalCoord;
+        }
+        auto backwardTile = std::make_unique<Tile>(0, 0, 0.0f);
+        portalWrappers.push_back(std::make_unique<Portal>(std::move(backwardTile), lvl-1,prevForwardCoord.x(),prevForwardCoord.y()));
+
+    }
+    model->setTiles(std::move(tileWrappers), rows, cols);
+    model->setProtagonist(std::move(protagonist));
+    model->setEnemies(std::move(enemyWrappers));
+    model->setHealthPacks(std::move(hpWrappers));
+    model->setPortals(std::move(portalWrappers));
+
+    cacheCurrentLevel(model, levelCache, lvl, randCoord);
+
+    emit model->modelReset();
+    return true;
+}
+QPoint GameStateManager::pickRandomValidTile(
+    const std::vector<std::unique_ptr<TileWrapper>> &tiles,
+    int rows,
+    int cols
+    ) {
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<> distX(0, cols - 1);
+    std::uniform_int_distribution<> distY(0, rows - 1);
+
+    while (true) {
+        int x = distX(gen);
+        int y = distY(gen);
+
+        // Skip (0,0)
+        if (x == 0 && y == 0) {
+            continue;
+        }
+
+        // Find the tile in 'tiles'
+        for (auto &tw : tiles) {
+            if (tw->getXPos() == x && tw->getYPos() == y) {
+                if (tw->getValue() != std::numeric_limits<float>::infinity()) {
+                    // Valid tile
+                    return QPoint(x, y);
                 }
-            }
-            if (tile && tile->getValue() != std::numeric_limits<float>::infinity() && !(x == 0 && y == 0)) {
-                auto pTile = std::make_unique<Tile>(x, y, 0.0f);
-                portalWrappers.push_back(std::make_unique<Portal>(std::move(pTile)));
-                portalPlaced = true;
-
-                model->setTiles(std::move(tileWrappers), rows, cols);
-                model->setProtagonist(std::move(protagonist));
-                model->setEnemies(std::move(enemyWrappers));
-                model->setHealthPacks(std::move(hpWrappers));
-                model->setPortals(std::move(portalWrappers));
-
-                cacheCurrentLevel(model, levelCache, lvl);
-
-                emit model->modelReset();
-                return true;
+                break;
             }
         }
     }
-
-    return true;
+    // Technically never returns here
+    return QPoint(-1, -1);
 }
 
 bool GameStateManager::restartGame(GameModel *model, QMap<int, std::shared_ptr<CachedLevel>> &levelCache)
 {
-    int lvl = model->getCurrentLevel();
-    model->setCurrentLevel(lvl);
+    levelCache.clear();
+    model->setCurrentLevel(0);
     return newGame(model, levelCache);
 }
 
@@ -149,7 +181,11 @@ bool GameStateManager::saveGameToFile(GameModel *model, const QString &fileName)
     auto &ports = model->getPortals();
     out << "Portals " << ports.size() << "\n";
     for (auto &pt : ports) {
-        out << pt->getXPos() << " " << pt->getYPos() << "\n";
+        out << pt->getXPos()        << " "
+            << pt->getYPos()        << " "
+            << pt->getTargetLevel() << " "
+            << pt->getTargetX()     << " "
+            << pt->getTargetY()     << "\n";
     }
 
     return true;
@@ -264,7 +300,7 @@ bool GameStateManager::loadGameFromFile(GameModel *model, QMap<int, std::shared_
         auto hpTile = std::make_unique<Tile>(hx, hy, hv);
         hps.push_back(std::make_unique<HealthPack>(std::move(hpTile)));
     }
-
+    QPoint forwardPortalCoord(-1, -1);
     line = in.readLine();
     if (!line.startsWith("Portals ")) return false;
     int numPortals = line.mid(8).toInt();
@@ -273,11 +309,20 @@ bool GameStateManager::loadGameFromFile(GameModel *model, QMap<int, std::shared_
     for (int i=0; i<numPortals; i++) {
         line = in.readLine();
         tokens = line.split(" ");
-        if (tokens.size()!=2) return false;
-        int ptx = tokens[0].toInt();
-        int pty = tokens[1].toInt();
+        if (tokens.size()!=5) return false;
+        int ptx         = tokens[0].toInt();
+        int pty         = tokens[1].toInt();
+        int targetLvl   = tokens[2].toInt();
+        int targetX     = tokens[3].toInt();
+        int targetY     = tokens[4].toInt();
         auto pTile = std::make_unique<Tile>(ptx, pty, 0.0f);
-        ports.push_back(std::make_unique<Portal>(std::move(pTile)));
+        ports.push_back(std::make_unique<Portal>(std::move(pTile),
+                                                 targetLvl,
+                                                 targetX,
+                                                 targetY));
+        if ((ptx != 0 || pty != 0) && forwardPortalCoord == QPoint(-1, -1)) {
+            forwardPortalCoord = QPoint(ptx, pty);
+        }
     }
 
     model->setTiles(std::move(tileWrappers), rows, cols);
@@ -286,7 +331,7 @@ bool GameStateManager::loadGameFromFile(GameModel *model, QMap<int, std::shared_
     model->setHealthPacks(std::move(hps));
     model->setPortals(std::move(ports));
 
-    cacheCurrentLevel(model, levelCache, lvl);
+    cacheCurrentLevel(model, levelCache, lvl, forwardPortalCoord);
 
     emit model->modelReset();
     emit model->modelUpdated();
@@ -308,7 +353,6 @@ void GameStateManager::loadLevelFromCache(GameModel *model, QMap<int, std::share
     {
         auto origP = cached->protagonist->getRaw();
         auto newProtag = std::make_unique<Protagonist>();
-        newProtag->setPos(origP->getXPos(), origP->getYPos());
         newProtag->setHealth(origP->getHealth());
         newProtag->setEnergy(origP->getEnergy());
         model->setProtagonist(std::make_unique<ProtagonistWrapper>(std::move(newProtag)));
@@ -318,16 +362,17 @@ void GameStateManager::loadLevelFromCache(GameModel *model, QMap<int, std::share
     model->setPortals(clonePortals(cached->portals));
 }
 
-void GameStateManager::cacheCurrentLevel(GameModel *model, QMap<int, std::shared_ptr<CachedLevel>> &levelCache, int level)
+void GameStateManager::cacheCurrentLevel(GameModel *model, QMap<int, std::shared_ptr<CachedLevel>> &levelCache, int level, const QPoint &forwardPortalCoord)
 {
     auto c = std::make_shared<CachedLevel>();
     c->rows = model->getRows();
     c->cols = model->getCols();
+    c->forwardPortalCoord = forwardPortalCoord;
     c->tiles = cloneTiles(model->getTiles());
     {
         auto origP = model->getProtagonist()->getRaw();
         auto newProtag = std::make_unique<Protagonist>();
-        newProtag->setPos(origP->getXPos(), origP->getYPos());
+        newProtag->setPos(0, 0);
         newProtag->setHealth(origP->getHealth());
         newProtag->setEnergy(origP->getEnergy());
         c->protagonist = std::make_unique<ProtagonistWrapper>(std::move(newProtag));
@@ -393,7 +438,10 @@ std::vector<std::unique_ptr<Portal>> GameStateManager::clonePortals(const std::v
     result.reserve(source.size());
     for (auto &pt : source) {
         auto pc = std::make_unique<Tile>(pt->getXPos(), pt->getYPos(), pt->getValue());
-        result.push_back(std::make_unique<Portal>(std::move(pc)));
+        result.push_back(std::make_unique<Portal>(std::move(pc),
+                                                  pt->getTargetLevel(),
+                                                  pt->getTargetX(),
+                                                  pt->getTargetY()));
     }
     return result;
 }
