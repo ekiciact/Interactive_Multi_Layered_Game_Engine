@@ -26,7 +26,7 @@ bool GameStateManager::newGame(GameModel *model, QMap<int, std::shared_ptr<Cache
 
     World w;
     try {
-        w.createWorld(model->getLevelFiles()[model->getCurrentLevel()], 20, 25);
+        w.createWorld(model->getLevelFiles()[model->getCurrentLevel()], 15, 25);
     } catch (...) {
         qWarning() << "Failed to create world";
         return false;
