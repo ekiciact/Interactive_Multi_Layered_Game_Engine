@@ -19,6 +19,10 @@ TextGameView::TextGameView(GameModel *model, QWidget *parent)
     statusTextEdit->setReadOnly(true);
     statusTextEdit->setFixedWidth(200);
 
+    helpTextEdit = new QTextEdit(this);
+    helpTextEdit->setReadOnly(true);
+    helpTextEdit->setFixedWidth(200);
+
     commandLine = new QLineEdit(this);
     connect(commandLine, &QLineEdit::returnPressed, this, &TextGameView::onCommandReturnPressed);
 
@@ -60,12 +64,21 @@ TextGameView::~TextGameView()
 
 void TextGameView::setupLayout()
 {
-    // Create a main horizontal layout for text and status side by side
+    // Create a horizontal layout for the main game view and right panel
     QHBoxLayout *mainLayout = new QHBoxLayout;
     mainLayout->addWidget(textEdit, 3);
-    mainLayout->addWidget(statusTextEdit, 1);
 
-    // Create a vertical layout that holds the main layout plus the command line at the bottom
+    // Create a vertical layout for the right panel (status and help)
+    QVBoxLayout *rightPanelLayout = new QVBoxLayout;
+
+    // Add status and help to right panel with equal heights
+    rightPanelLayout->addWidget(statusTextEdit);
+    rightPanelLayout->addWidget(helpTextEdit);
+
+    // Add right panel to main layout
+    mainLayout->addLayout(rightPanelLayout, 1);
+
+    // Create the final vertical layout with command line at bottom
     QVBoxLayout *vLayout = new QVBoxLayout(this);
     vLayout->addLayout(mainLayout);
     vLayout->addWidget(commandLine);
@@ -77,6 +90,12 @@ void TextGameView::appendMessage(const QString &msg)
 {
     textEdit->append(msg);
     textEdit->verticalScrollBar()->setValue(textEdit->verticalScrollBar()->maximum());
+}
+
+void TextGameView::appendHelpMessage(const QString &msg)
+{
+    helpTextEdit->clear(); // Clear previous help text
+    helpTextEdit->setPlainText(msg);
 }
 
 void TextGameView::handleModelReset()

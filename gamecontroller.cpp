@@ -162,7 +162,7 @@ void GameController::handleTextCommand(QString command)
 
 void GameController::printHelp()
 {
-    textView->appendMessage(commandParser.helpText());
+    textView->appendHelpMessage(commandParser.helpText());
 }
 
 void GameController::moveUp() { moveProtagonist(0, -1); }

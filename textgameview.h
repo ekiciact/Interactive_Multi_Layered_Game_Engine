@@ -17,6 +17,7 @@ public:
     ~TextGameView() override;
 
     void appendMessage(const QString &msg);
+    void appendHelpMessage(const QString &msg);
 
 signals:
     void commandEntered(QString command);
@@ -36,6 +37,7 @@ private:
     GameModel *model;
     QTextEdit *textEdit;
     QTextEdit *statusTextEdit;
+    QTextEdit *helpTextEdit;    // New widget for help text
     QLineEdit *commandLine;
 
     QTimer *colorTimer;       // Timer to cycle protagonist color
