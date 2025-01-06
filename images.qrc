@@ -17,5 +17,6 @@
         <file>images/xenemy.png</file>
         <file>images/teleport_new.png</file>
         <file>images/teleport_old.png</file>
+        <file>images/level_overlay.png</file>
     </qresource>
 </RCC>

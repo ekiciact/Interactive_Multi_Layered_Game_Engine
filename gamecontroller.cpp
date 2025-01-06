@@ -66,6 +66,8 @@ void GameController::setupViews()
     stackedWidget->addWidget(graphicView);
     stackedWidget->addWidget(textView);
     setCentralWidget(stackedWidget);
+
+    graphicView->setUniversalOverlayImage(":/images/level_overlay.png");
 }
 
 void GameController::setupConnections()
@@ -107,6 +109,9 @@ void GameController::createActions()
 
     restartGameAction = new QAction(tr("&Restart Game"), this);
     connect(restartGameAction, &QAction::triggered, this, &GameController::restartGame);
+
+    toggleOverlayAction = new QAction(tr("&Toggle Overlay"), this);
+    connect(toggleOverlayAction, &QAction::triggered, this, &GameController::toggleOverlay);
 }
 
 void GameController::createMenus()
@@ -120,6 +125,7 @@ void GameController::createMenus()
 
     viewMenu = menuBar()->addMenu(tr("&View"));
     viewMenu->addAction(switchViewAction);
+    viewMenu->addAction(toggleOverlayAction); // Add it to the menu
 }
 
 void GameController::setupCommands()
@@ -519,6 +525,13 @@ void GameController::moveProtagonistDirectlyToTile(int x, int y)
     } else {
         qDebug() << "No path found to the selected tile.";
     }
+}
+
+void GameController::toggleOverlay()
+{
+    if (!graphicView) return;
+    bool visible = graphicView->isOverlayVisible();
+    graphicView->setOverlayVisible(!visible);
 }
 
 std::vector<int> GameController::computeDirectPath(int startX, int startY, int endX, int endY, bool avoidPortalIfEnemies)

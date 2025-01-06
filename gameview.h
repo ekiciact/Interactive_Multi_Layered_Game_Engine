@@ -20,6 +20,10 @@ class GameView : public QWidget
 public:
     explicit GameView(GameModel *model, QWidget *parent = nullptr);
     ~GameView();
+    void setOverlayVisible(bool visible); // Toggle visibility of overlay
+    bool isOverlayVisible() const;        // Check if overlay is visible
+    void setOverlayImage(const QString &path); // Set a new overlay image
+    void setUniversalOverlayImage(const QString &path);
 
 signals:
     void moveRequest(int dx, int dy);
@@ -40,6 +44,7 @@ private:
     void setupScene();
     void drawTiles();
     void drawEntities();
+    void updateOverlay(); // Update overlay size/position during zoom
     void animateProtagonist(const QString &action);
     void updateStatus();
     void setupLayout();
@@ -61,7 +66,8 @@ private:
     QProgressBar *healthBar;
     QProgressBar *energyBar;
 
-    QGraphicsPixmapItem *overlayItem;
+    QGraphicsPixmapItem *overlayItem; // Overlay image item
+    QString currentOverlayPath;      // Path to the overlay image
 };
 
 #endif // GAMEVIEW_H

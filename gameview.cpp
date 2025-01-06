@@ -83,12 +83,12 @@ void GameView::setupScene()
     drawTiles();
     drawEntities();
 
-    // Add overlay image
-    QPixmap overlayMap(":/images/overlay.png");
-    if (!overlayMap.isNull()) {
-        overlayItem = scene->addPixmap(overlayMap.scaled(scene->sceneRect().size().toSize()));
-        overlayItem->setZValue(10); // top layer
-    }
+    // Add overlay image (default to hidden)
+    overlayItem = new QGraphicsPixmapItem();
+    overlayItem->setZValue(1); // Ensure it's on top of tiles
+    overlayItem->setOpacity(0.5); // Set transparency for better visibility
+    overlayItem->setVisible(false); // Start hidden
+    scene->addItem(overlayItem);
 }
 
 void GameView::drawTiles()
@@ -114,6 +114,7 @@ void GameView::drawTiles()
             // } else {
             int colorValue = static_cast<int>(tile->getValue()*255);
             item->setBrush(QColor(colorValue,colorValue,colorValue));
+            item->setZValue(0);
             //}
         }
         tileItems.insert(tile.get(), item);
@@ -127,6 +128,7 @@ void GameView::drawEntities()
     ProtagonistWrapper *protagonist = model->getProtagonist();
     protagonistItem = scene->addPixmap(QPixmap(":/images/protagonist.png").scaled(32,32));
     protagonistItem->setPos(protagonist->getXPos()*32, protagonist->getYPos()*32);
+    protagonistItem->setZValue(2);
 
     for (auto &enemy : model->getEnemies()) {
         QString imagePath = ":/images/enemy.png";
@@ -144,18 +146,21 @@ void GameView::drawEntities()
 
         QGraphicsPixmapItem *item = scene->addPixmap(img);
         item->setPos(enemy->getXPos()*32, enemy->getYPos()*32);
+        item->setZValue(2);
         enemyItems.insert(enemy.get(), item);
     }
 
     for (auto &hp : model->getHealthPacks()) {
         QGraphicsPixmapItem *item = scene->addPixmap(QPixmap(":/images/healthpack.png").scaled(32,32));
         item->setPos(hp->getXPos()*32, hp->getYPos()*32);
+        item->setZValue(2);
         healthPackItems.insert(hp.get(), item);
     }
 
     for (auto &portal : model->getPortals()) {
         QGraphicsPixmapItem *item = scene->addPixmap(QPixmap(":/images/portal.png").scaled(32,32));
         item->setPos(portal->getXPos()*32, portal->getYPos()*32);
+        item->setZValue(2);
         portalItems.insert(portal.get(), item);
     }
 }
@@ -277,6 +282,48 @@ void GameView::updateStatus()
     statusTextEdit->setPlainText(statusText);
 }
 
+void GameView::setOverlayVisible(bool visible) {
+    if (overlayItem) {
+        overlayItem->setVisible(visible);
+    }
+}
+
+bool GameView::isOverlayVisible() const {
+    return overlayItem && overlayItem->isVisible();
+}
+
+void GameView::setOverlayImage(const QString &path)
+{
+    QPixmap overlayMap(path);
+    if (!overlayMap.isNull() && overlayItem) {
+        overlayItem->setPixmap(overlayMap.scaled(scene->sceneRect().size().toSize()));
+        overlayItem->setPos(scene->sceneRect().topLeft());
+        currentOverlayPath = path;
+        overlayItem->setVisible(true);
+    } else {
+        qDebug() << "Overlay pixmap is null for path:" << path;
+        overlayItem->setVisible(false);
+    }
+}
+
+void GameView::setUniversalOverlayImage(const QString &path)
+{
+    currentOverlayPath = path;
+    QPixmap overlayMap(path);
+
+    if (!overlayMap.isNull() && overlayItem) {
+        // Scale the overlay to fit exactly over the tile grid
+        overlayItem->setPixmap(
+            overlayMap.scaled(scene->sceneRect().size().toSize())
+            );
+        overlayItem->setPos(scene->sceneRect().topLeft());
+    } else {
+        qDebug() << "Overlay pixmap is null for path:" << path;
+        if (overlayItem)
+            overlayItem->setVisible(false);
+    }
+}
+
 void GameView::animateProtagonist(const QString &)
 {
     // simple scale animation
@@ -354,12 +401,16 @@ void GameView::graphicsViewWheelEvent(QWheelEvent *event)
         graphicsView->horizontalScrollBar()->setValue(graphicsView->horizontalScrollBar()->value() + offset.x());
         graphicsView->verticalScrollBar()->setValue(graphicsView->verticalScrollBar()->value() + offset.y());
         event->accept();
+
+        // Update overlay scaling
+        if (overlayItem) {
+            overlayItem->setPixmap(QPixmap(currentOverlayPath).scaled(scene->sceneRect().size().toSize()));
+        }
     } else {
         // If Ctrl is not pressed, do nothing
         event->ignore();
     }
 }
-
 
 void GameView::mousePressEvent(QMouseEvent *event)
 {

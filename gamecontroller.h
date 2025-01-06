@@ -41,6 +41,7 @@ public slots:
     void attackNearestEnemy();
     void takeNearestHealthPack();
     void printHelp();
+    void toggleOverlay();
 
 private slots:
     void switchView();
@@ -98,6 +99,7 @@ private:
     QAction *loadGameAction;
     QAction *newGameAction;
     QAction *restartGameAction;
+    QAction *toggleOverlayAction;
     QMenu *gameMenu;
     QMenu *viewMenu;
 

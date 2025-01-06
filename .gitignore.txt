@@ -1,0 +1,34 @@
+# User-specific Qt Creator/Qt project files:
+*.pro.user
+*.qmake.stash
+*.user
+
+# Build folders (often generated):
+build/
+debug/
+release/
+
+# Makefiles and build outputs:
+Makefile
+Makefile.Debug
+Makefile.Release
+*.o
+*.obj
+*.dll
+*.so
+*.dylib
+*.a
+*.lib
+
+# Windows executables and other OS-specific files:
+*.exe
+*.log
+*.cache
+*.pdb
+
+# macOS DS_Store
+.DS_Store
+
+# Additional or hidden folders you don’t want to commit:
+# (Add any custom or IDE-specific directories here)
+# .qtc_clangd/
