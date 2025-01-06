@@ -10,13 +10,13 @@
         <file>images/protagonist.png</file>
         <file>images/world.png</file>
         <file>images/worldmap4.png</file>
-        <file>images/level1.png</file>
         <file>images/level2.png</file>
-        <file>images/level3.png</file>
         <file>images/portal.png</file>
         <file>images/xenemy.png</file>
         <file>images/teleport_new.png</file>
         <file>images/teleport_old.png</file>
+        <file>images/level3.png</file>
         <file>images/level_overlay.png</file>
+        <file>images/level1.png</file>
     </qresource>
 </RCC>
