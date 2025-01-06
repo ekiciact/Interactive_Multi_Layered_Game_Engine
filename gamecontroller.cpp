@@ -401,6 +401,14 @@ void GameController::checkForEncounters()
                 // XEnemy logic:
                 if (xE->getTimesHit() == 0) {
                     xE->hit();
+
+                    int newX = xE->getXPos();
+                    int newY = xE->getYPos();
+
+                    if(!model->isTilePassable(newX,newY)){
+                        xE->hit();
+                    }
+
                     emit model->modelUpdated();
                 } else if (xE->getTimesHit() == 1) {
                     float healthCost = e->getStrength();

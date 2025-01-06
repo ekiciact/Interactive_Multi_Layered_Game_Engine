@@ -37,3 +37,23 @@ void GameModel::setPortals(std::vector<std::unique_ptr<Portal>> p) {
     portals = std::move(p);
     emit modelUpdated();
 }
+
+bool GameModel::isTilePassable(int x, int y) const
+{
+    // 1) Check bounds
+    if (x < 0 || x >= cols || y < 0 || y >= rows) {
+        return false;  // Out of bounds is definitely not passable
+    }
+
+    // 2) Convert (x, y) into an index for tiles[y*cols + x]
+    int index = y * cols + x;
+
+    // 3) Check if the tile is infinite
+    float tileValue = tiles[index]->getValue();
+    if (tileValue == std::numeric_limits<float>::infinity()) {
+        return false;  // Not passable
+    }
+
+    // Otherwise, it's passable
+    return true;
+}

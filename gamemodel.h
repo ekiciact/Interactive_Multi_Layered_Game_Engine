@@ -57,6 +57,7 @@ public:
 
     // For loading/saving and new/restart games
     const QVector<QString>& getLevelFiles() const { return levelFiles; }
+    bool isTilePassable(int x, int y) const;
 
 signals:
     void modelUpdated();
