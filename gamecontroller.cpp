@@ -472,7 +472,7 @@ void GameController::checkForPortal()
     auto &ports = const_cast<std::vector<std::unique_ptr<Portal>>&>(model->getPortals());
     for (auto &portal : ports) {
         if (portal->getXPos() == p->getXPos() && portal->getYPos() == p->getYPos()) {
-            if (anyEnemyAlive) {
+            if (!anyEnemyAlive) {
                 int targetLvl = portal->getTargetLevel();
                 int targetX = portal->getTargetX();
                 int targetY = portal->getTargetY();
@@ -484,8 +484,14 @@ void GameController::checkForPortal()
                 }
                 stopAutoPlay();
                 commandMoveTimer->stop();
+                QPoint portalCoord(portal->getXPos(), portal->getYPos());
+
+                //this line enables you to save the state of the game before you go through a portal, my teammate doenst like this so this
+                //is commented out, but it works ¯\_(ツ)_/¯
+                //gameStateManager.cacheCurrentLevel(model, levelCache, model->currentLevel, portalCoord);
                 model->setCurrentLevel(targetLvl);
                 gameStateManager.newGame(model, levelCache);
+                //gameStateManager.newGame(model, levelCache);
                 model->getProtagonist()->setPos(targetX, targetY);
 
                 emit model->modelUpdated();

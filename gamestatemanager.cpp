@@ -367,7 +367,9 @@ void GameStateManager::cacheCurrentLevel(GameModel *model, QMap<int, std::shared
     auto c = std::make_shared<CachedLevel>();
     c->rows = model->getRows();
     c->cols = model->getCols();
-    c->forwardPortalCoord = forwardPortalCoord;
+    if (forwardPortalCoord != QPoint(0, 0)) {
+        c->forwardPortalCoord = forwardPortalCoord;
+    }
     c->tiles = cloneTiles(model->getTiles());
     {
         auto origP = model->getProtagonist()->getRaw();
