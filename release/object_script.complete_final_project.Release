@@ -1,0 +1,12 @@
+release/gamecontroller.o
+release/gamemodel.o
+release/gameview.o
+release/main.o
+release/mainwindow.o
+release/textgameview.o
+release/qrc_images.o
+release/moc_gamecontroller.o
+release/moc_gamemodel.o
+release/moc_gameview.o
+release/moc_mainwindow.o
+release/moc_textgameview.o
