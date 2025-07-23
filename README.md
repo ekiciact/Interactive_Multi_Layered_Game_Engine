@@ -6,7 +6,7 @@ Scooh is a versatile, interactive game engine featuring multiple representation 
 
 ### UML Diagram
 
-![UML Design](UML Design/UML Diagram.png)
+![UML Design](UML%20Design/UML%20Diagram.png)
 
 ## Key Features
 
