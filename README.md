@@ -4,6 +4,10 @@
 
 Scooh is a versatile, interactive game engine featuring multiple representation layers and intelligent pathfinding. The engine provides a rich environment for creating and exploring dynamic worlds with customizable enemies, interactive elements, and multi-layered visualizations.
 
+### UML Diagram
+
+![UML Design](UML Design/UML Diagram.png)
+
 ## Key Features
 
 ### Multi-Layered Visualization
